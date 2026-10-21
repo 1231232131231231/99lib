@@ -2567,19 +2567,19 @@ function library:window(properties)
 	blur_fx.Parent = camera
 	table.insert(library.instances, blur_fx)
 
-	-- nhack cursor asset
+	-- nhack cursor 1:1 (Library.lua MouseCursor)
 	local cursor_gui = library:create("ImageLabel", {
 		Parent = library.gui,
 		Name = "CustomCursor",
+		Visible = false,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Image = "http://www.roblox.com/asset/?id=5545698398",
-		Size = UDim2.fromOffset(28, 28),
+		Size = UDim2.new(0, 36, 0, 36),
 		ZIndex = 10000,
-		Visible = false,
-		ScaleType = Enum.ScaleType.Fit,
 	})
 
+	local mouse_state_before = nil
 	local function set_backdrop(open)
 		menu_open = open and true or false
 		backdrop.Visible = menu_open
@@ -2588,8 +2588,22 @@ function library:window(properties)
 			local target = menu_open and 18 or 0
 			tween_service:Create(blur_fx, TweenInfo.new(0.25), { Size = target }):Play()
 		end)
+		-- nhack ApplyWindowInputState
 		pcall(function()
-			uis.MouseIconEnabled = not menu_open
+			if menu_open then
+				mouse_state_before = {
+					MouseBehavior = uis.MouseBehavior,
+					MouseIconEnabled = uis.MouseIconEnabled,
+				}
+				uis.MouseBehavior = Enum.MouseBehavior.Default
+				uis.MouseIconEnabled = false
+			elseif mouse_state_before then
+				uis.MouseBehavior = mouse_state_before.MouseBehavior or Enum.MouseBehavior.Default
+				uis.MouseIconEnabled = mouse_state_before.MouseIconEnabled ~= false
+				mouse_state_before = nil
+			else
+				uis.MouseIconEnabled = true
+			end
 		end)
 	end
 
@@ -2597,9 +2611,8 @@ function library:window(properties)
 		if not (menu_open and cursor_gui.Visible) then
 			return
 		end
-		local m = uis:GetMouseLocation()
-		-- IgnoreGuiInset = true → use raw mouse location (nhack style)
-		cursor_gui.Position = UDim2.fromOffset(m.X - 14, m.Y - 14)
+		local MouseLocation = uis:GetMouseLocation()
+		cursor_gui.Position = UDim2.new(0, MouseLocation.X - 18, 0, MouseLocation.Y - 18)
 	end)
 
 	set_backdrop(true)
@@ -4402,7 +4415,7 @@ function library:colorpicker(properties)
 	local picker_inline = library:create("Frame", {
 		Parent = library.gui,
 		Name = "",
-		Size = UDim2.new(0, 142, 0, 146),
+		Size = UDim2.new(0, 200, 0, 210),
 		Position = dim2(0, icon_inline.AbsolutePosition.X + 1, 0, icon_inline.AbsolutePosition.Y + 17),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		ZIndex = 9999,
@@ -4426,7 +4439,7 @@ function library:colorpicker(properties)
 		Text = "",
 		Position = UDim2.new(0, 4, 0, 4),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		Size = UDim2.new(1, -8, 1, -50),
+		Size = UDim2.new(1, -10, 1, -62),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
@@ -4486,9 +4499,22 @@ function library:colorpicker(properties)
 		Parent = sat_black,
 		Name = "",
 		Position = UDim2.new(0.800000011920929, 0, 0.20000000298023224, 0),
-		BorderColor3 = Color3.fromRGB(108, 22, 22),
-		Size = UDim2.new(0, 1, 0, 1),
-		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
+		BorderColor3 = Color3.fromRGB(255, 255, 255),
+		Size = UDim2.new(0, 6, 0, 6),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 1,
+		ZIndex = 5,
+	})
+	-- inner shows the actual selected color
+	local sat_cursor_fill = library:create("Frame", {
+		Parent = sat_black_cursor,
+		Name = "",
+		Position = UDim2.new(0, 1, 0, 1),
+		Size = UDim2.new(1, -2, 1, -2),
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		ZIndex = 6,
 	})
 
 	local preview_inline = library:create("Frame", {
@@ -4608,9 +4634,9 @@ function library:colorpicker(properties)
 		Parent = picker,
 		Name = "",
 		Text = "",
-		Position = UDim2.new(0, 4, 1, -32),
+		Position = UDim2.new(0, 5, 1, -34),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		Size = UDim2.new(1, -8, 0, 10),
+		Size = UDim2.new(1, -10, 0, 12),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
@@ -4621,7 +4647,7 @@ function library:colorpicker(properties)
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
 		Size = UDim2.new(1, -4, 1, -4),
-		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
+		BackgroundColor3 = themes.preset.accent,
 	})
 
 	local alpha_image = library:create("ImageLabel", {
@@ -4650,9 +4676,9 @@ function library:colorpicker(properties)
 		Parent = alpha_image,
 		Name = "",
 		Position = UDim2.new(0.5, 0, 0, 0),
-		BorderColor3 = Color3.fromRGB(108, 22, 22),
-		Size = UDim2.new(0, 1, 1, 0),
-		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
+		BorderColor3 = Color3.fromRGB(255, 255, 255),
+		Size = UDim2.new(0, 2, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 	})
 
 	--
@@ -4886,6 +4912,12 @@ function library:colorpicker(properties)
 		preview_image.ImageTransparency = 1 - a
 
 		sat.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+		alpha.BackgroundColor3 = Color
+		alpha_cursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		alpha_cursor.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		if sat_cursor_fill then
+			sat_cursor_fill.BackgroundColor3 = Color
+		end
 
 		local s_offset = (s < 1) and 0 or -3
 		local v_offset = (1 - v < 1) and 0 or -3
