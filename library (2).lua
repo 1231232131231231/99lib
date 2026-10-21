@@ -625,10 +625,11 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		Text = watermark_full,
 		TextStrokeTransparency = 0.5,
-		Size = UDim2.new(1, -6, 1, 0),
-		Position = UDim2.new(0, 3, 0, 0),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 4, 0, 0),
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.None,
 		BorderSizePixel = 0,
 		TextSize = 12,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
@@ -668,7 +669,8 @@ function library:window(properties)
 	task.defer(function()
 		name.Text = watermark_full
 		task.wait()
-		local w = math.max(80, math.ceil((name.TextBounds.X or 0) + 6 + 20)) -- 3px+3px gap + chrome
+		-- TextBounds + left text inset (3) + right gap (~8) + nested chrome (~24)
+		local w = math.max(100, math.ceil((name.TextBounds.X or 0) + 40))
 		__holder.Size = UDim2.new(0, w, 0, 40)
 		name.Text = animated_text[1] or watermark_full
 	end)
@@ -775,8 +777,8 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 		ZIndex = 3,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, 22),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 26),
+		Size = UDim2.new(0, cfg.size.X.Offset, 0, 26),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 30),
 	})
 	table.insert(library.main_frame, title_bar)
 	library:add_window_glow(title_bar)
@@ -827,7 +829,7 @@ function library:window(properties)
 		Size = UDim2.new(1, -8, 1, 0),
 		Position = UDim2.new(0, 4, 0, 0),
 		ZIndex = 4,
-		TextSize = 12,
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
 
@@ -859,12 +861,12 @@ function library:window(properties)
 	-- keep title bar glued above the main window when dragged/resized
 	local function syncTitleBar()
 		pcall(function()
-			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 22)
+			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 26)
 			title_bar.Position = UDim2.new(
 				0,
 				inline1.AbsolutePosition.X,
 				0,
-				inline1.AbsolutePosition.Y - 26
+				inline1.AbsolutePosition.Y - 30
 			)
 		end)
 	end
