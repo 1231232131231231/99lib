@@ -56,7 +56,7 @@ getgenv().library = {
 	keybind_path,
 	panel_open = false,
 
-	directory = "inactivity",
+	directory = "ZOVII",
 	folders = {
 		"/fonts",
 		"/configs",
@@ -166,9 +166,17 @@ local keys = {
 
 library.__index = library
 
-for _, path in next, library.folders do
-	makefolder(library.directory .. path)
-end
+pcall(function()
+	if not isfolder(library.directory) then
+		makefolder(library.directory)
+	end
+	for _, path in next, library.folders do
+		local full = library.directory .. path
+		if not isfolder(full) then
+			makefolder(full)
+		end
+	end
+end)
 
 if not isfile(library.directory .. "/fonts/main.ttf") then
 	writefile(
@@ -333,48 +341,112 @@ function library:config_list_update()
 	end
 
 	local list = {}
-
-	for idx, file in next, listfiles(library.directory .. "/configs") do
-		local name = file.split(file, "/configs/")[2]
-		name = name.split(name, ".cfg")[1]
-		list[#list + 1] = name
+	local dir = library.directory .. "/configs"
+	local ok, files = pcall(function()
+		return listfiles(dir)
+	end)
+	if not ok or type(files) ~= "table" then
+		files = {}
 	end
 
-	library.config_holder:refresh_options(list)
+	for _, file in next, files do
+		if type(file) ~= "string" then
+			continue
+		end
+		-- normalize separators
+		local normalized = string.gsub(file, "\\", "/")
+		local name = normalized:match("([^/]+)%.cfg$") or normalized:match("([^/]+)$")
+		if name and name ~= "" then
+			name = string.gsub(name, "%.cfg$", "")
+			list[#list + 1] = name
+		end
+	end
+
+	table.sort(list)
+	pcall(function()
+		library.config_holder:refresh_options(list)
+	end)
 end
 
 function library:get_config()
 	local Config = {}
 
-	for _, v in flags do
+	for flag, v in pairs(flags) do
 		if type(v) == "table" and v.key then
-			Config[_] = { active = v.active, mode = v.mode, key = tostring(v.key) }
-		elseif type(v) == "table" and v["Transparency"] and v["Color"] then
-			Config[_] = { Transparency = v["Transparency"], Color = v["Color"]:ToHex() }
+			Config[flag] = { active = v.active, mode = v.mode, key = tostring(v.key) }
+		elseif type(v) == "table" and v["Transparency"] and typeof(v["Color"]) == "Color3" then
+			Config[flag] = { Transparency = v["Transparency"], Color = v["Color"]:ToHex() }
 		else
-			Config[_] = v
+			Config[flag] = v
 		end
 	end
 
 	return http_service:JSONEncode(Config)
 end
 
-function library:load_config(config_json)
-	local config = http_service:JSONDecode(config_json)
+function library:save_config(name)
+	name = tostring(name or "default"):gsub("[^%w%-%_ ]", "")
+	if name == "" then name = "default" end
+	local dir = library.directory .. "/configs"
+	pcall(function()
+		if not isfolder(library.directory) then makefolder(library.directory) end
+		if not isfolder(dir) then makefolder(dir) end
+	end)
+	local path = dir .. "/" .. name .. ".cfg"
+	local ok, err = pcall(function()
+		writefile(path, library:get_config())
+	end)
+	library:config_list_update()
+	return ok, err or path
+end
 
-	for _, v in next, config do
-		local function_set = library.config_flags[_]
+function library:delete_config(name)
+	name = tostring(name or ""):gsub("[^%w%-%_ ]", "")
+	if name == "" then return false end
+	local path = library.directory .. "/configs/" .. name .. ".cfg"
+	local ok = pcall(function()
+		if isfile(path) then delfile(path) end
+	end)
+	library:config_list_update()
+	return ok
+end
+
+function library:load_config(config_json_or_name)
+	local config_json = config_json_or_name
+	if type(config_json_or_name) == "string" and not string.find(config_json_or_name, "{", 1, true) then
+		local path = library.directory .. "/configs/" .. tostring(config_json_or_name) .. ".cfg"
+		local ok, data = pcall(function()
+			return readfile(path)
+		end)
+		if not ok or type(data) ~= "string" then
+			library:notification({ text = "Config not found: " .. tostring(config_json_or_name) })
+			return false
+		end
+		config_json = data
+	end
+
+	local ok, config = pcall(function()
+		return http_service:JSONDecode(config_json)
+	end)
+	if not ok or type(config) ~= "table" then
+		library:notification({ text = "Invalid config JSON" })
+		return false
+	end
+
+	for flag, v in next, config do
+		local function_set = library.config_flags[flag]
 
 		if function_set then
 			if type(v) == "table" and v["Transparency"] and v["Color"] then
-				function_set(hex(v["Color"]), v["Transparency"])
-			elseif type(v) == "table" and v["active"] then
-				function_set(v)
+				pcall(function_set, hex(v["Color"]), v["Transparency"])
+			elseif type(v) == "table" and v["active"] ~= nil then
+				pcall(function_set, v)
 			else
-				function_set(v)
+				pcall(function_set, v)
 			end
 		end
 	end
+	return true
 end
 
 function library:round(number, float)
@@ -452,7 +524,8 @@ function library:window(properties)
 		Active = true,
 		Draggable = true,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(0, ((#animated_text / 2) * 5) + 13, 0, 40),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 0, 40),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -483,7 +556,8 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(1, -4, 1, -4),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, -4),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
@@ -493,7 +567,8 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(57, 57, 57),
-		Size = UDim2.new(1, -4, 1, -4),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
 
@@ -502,7 +577,8 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 6, 0, 6),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		Size = UDim2.new(1, -12, 1, -12),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, -12),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(19, 19, 19),
 	})
@@ -512,7 +588,8 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
-		Size = UDim2.new(1, -4, 1, -4),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(22, 22, 22),
 	})
 
@@ -522,7 +599,7 @@ function library:window(properties)
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "ledger.live",
+		Text = cfg.name .. " | private",
 		TextStrokeTransparency = 0.5,
 		Size = UDim2.new(0, 0, 1, 0),
 		Position = UDim2.new(0, 8, 0, 0),
@@ -547,7 +624,8 @@ function library:window(properties)
 	local UIPadding = library:create("UIPadding", {
 		Parent = tabs,
 		Name = "",
-		PaddingRight = UDim.new(0, 21),
+		PaddingRight = UDim.new(0, 16),
+		PaddingLeft = UDim.new(0, 0),
 	})
 
 	local glow = library:create("ImageLabel", {
@@ -569,12 +647,26 @@ function library:window(properties)
 
 	library:apply_theme(glow, "accent", "ImageColor3")
 
+	local function fitWatermark()
+		local bounds = name.TextBounds.X
+		local w = math.max(80, bounds + 28)
+		-- keep AutomaticSize; padding already expands parents
+		pcall(function()
+			if inline1.AbsoluteSize.X < w then
+				-- force minimum via padding if needed
+			end
+		end)
+	end
+	name:GetPropertyChangedSignal("Text"):Connect(fitWatermark)
+	name:GetPropertyChangedSignal("TextBounds"):Connect(fitWatermark)
+
 	task.spawn(function()
 		while true do
 			if __holder.Visible then
 				for i = 1, #animated_text do
 					task.wait(0.2)
 					name.Text = animated_text[i]
+					fitWatermark()
 				end
 			end
 			task.wait(0.2)
@@ -662,6 +754,91 @@ function library:window(properties)
 
 	cfg["tab_instance_holder"] = tabs
 
+	-- Title bar ABOVE main window (secrethaxx-style): accent + glow + readable title
+	local title_bar = library:create("Frame", {
+		Parent = library.gui,
+		Name = "TitleBar",
+		BorderColor3 = Color3.fromRGB(8, 8, 8),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		ZIndex = 3,
+		Size = UDim2.new(0, cfg.size.X.Offset, 0, 22),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 26),
+	})
+	table.insert(library.main_frame, title_bar)
+
+	local title_accent = library:create("Frame", {
+		Parent = title_bar,
+		Name = "",
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = themes.preset.accent,
+	})
+	library:apply_theme(title_accent, "accent", "BackgroundColor3")
+
+	local title_glow = library:create("ImageLabel", {
+		Parent = title_bar,
+		Name = "",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.9,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -20, 0, -18),
+		Size = UDim2.new(1, 40, 0, 40),
+		ZIndex = 2,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(title_glow, "accent", "ImageColor3")
+
+	local title_inner = library:create("Frame", {
+		Parent = title_bar,
+		Name = "",
+		Position = UDim2.new(0, 2, 0, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
+	})
+
+	local name = library:create("TextLabel", {
+		Parent = title_inner,
+		Name = "",
+		FontFace = library.font,
+		TextColor3 = Color3.fromRGB(200, 200, 200),
+		BorderSizePixel = 0,
+		Text = cfg.name,
+		TextStrokeTransparency = 0.5,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 4, 0, 0),
+		ZIndex = 4,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+
+	-- keep title bar glued above the main window when dragged/resized
+	local function syncTitleBar()
+		pcall(function()
+			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 22)
+			title_bar.Position = UDim2.new(
+				0,
+				inline1.AbsolutePosition.X,
+				0,
+				inline1.AbsolutePosition.Y - 26
+			)
+		end)
+	end
+	library:connection(inline1:GetPropertyChangedSignal("AbsolutePosition"), syncTitleBar)
+	library:connection(inline1:GetPropertyChangedSignal("AbsoluteSize"), syncTitleBar)
+	-- also follow while dragging (AbsolutePosition can lag behind Input)
+	library:connection(uis.InputChanged, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement and title_bar.Parent then
+			syncTitleBar()
+		end
+	end)
+	task.defer(syncTitleBar)
+
+	-- thin accent still on main window top edge
 	local accent_line = library:create("Frame", {
 		Parent = inline1,
 		Name = "",
@@ -670,43 +847,7 @@ function library:window(properties)
 		BorderSizePixel = 0,
 		BackgroundColor3 = themes.preset.accent,
 	})
-
 	library:apply_theme(accent_line, "accent", "BackgroundColor3")
-
-	local name = library:create("TextLabel", {
-		Parent = inline1,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(170, 170, 170),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = cfg.name,
-		TextStrokeTransparency = 0.5,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, -1),
-		Size = UDim2.new(1, 0, 0, 1),
-		ZIndex = 2,
-		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	})
-
-	local glow = library:create("ImageLabel", {
-		Parent = inline1,
-		Name = "",
-		ImageColor3 = themes.preset.accent,
-		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.8999999761581421,
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		Image = "http://www.roblox.com/asset/?id=18245826428",
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, -20, 0, -20),
-		Size = UDim2.new(1, 40, 0, 42),
-		ZIndex = 2,
-		BorderSizePixel = 0,
-		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
-	})
-	library:apply_theme(glow, "accent", "ImageColor3")
 
 	local depth = library:create("Frame", {
 		Parent = inline1,
@@ -734,12 +875,15 @@ function library:window(properties)
 		while true do
 			if flags["color_picker_anim_speed"] then
 				library.sin = math.abs(math.sin(tick() * flags["color_picker_anim_speed"]))
-
-				TEXT_ANIMATION_GRADIENT.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-					ColorSequenceKeypoint.new(math.abs(math.sin(tick())), themes.preset.accent),
-					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-				})
+				pcall(function()
+					if TEXT_ANIMATION_GRADIENT then
+						TEXT_ANIMATION_GRADIENT.Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+							ColorSequenceKeypoint.new(math.abs(math.sin(tick())), themes.preset.accent),
+							ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+						})
+					end
+				end)
 			end
 			task.wait()
 		end
@@ -2749,22 +2893,29 @@ function library:section(properties)
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
 
+	-- Section title sits ON the top border with solid bg so the border stops at the text (±2px)
 	local name = library:create("TextLabel", {
 		Parent = section_inline,
 		Name = "",
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = cfg.name,
+		Text = "  " .. tostring(cfg.name) .. "  ",
 		TextStrokeTransparency = 0.5,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 1),
-		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 0, 12),
+		BackgroundTransparency = 0,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 8, 0, 0),
-		ZIndex = 2,
+		Position = UDim2.new(0, 8, 0, -6),
+		ZIndex = 3,
 		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = Color3.fromRGB(8, 8, 8), -- match section_inline
+	})
+	library:create("UIPadding", {
+		Parent = name,
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 2),
 	})
 
 	local section = library:create("Frame", {
