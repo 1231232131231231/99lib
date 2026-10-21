@@ -71,12 +71,12 @@ local themes = {
 	preset = {
 		["outline"] = rgb(32, 32, 38), --
 		["inline"] = rgb(60, 55, 75), --
-		["accent"] = rgb(100, 100, 255), --
+		["accent"] = rgb(245, 92, 176), -- pink
 		["contrast"] = rgb(35, 35, 47),
 		["text"] = rgb(170, 170, 170),
 		["unselected_text"] = rgb(90, 90, 90),
 		["text_outline"] = rgb(0, 0, 0),
-		["glow"] = rgb(100, 100, 255),
+		["glow"] = rgb(245, 92, 176),
 	},
 
 	utility = {
@@ -498,6 +498,31 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
+
+function library:add_window_glow(parent)
+	if not parent then return end
+	-- same glow asset / theme binding used on tabs, toggles, accent lines
+	local glow = library:create("ImageLabel", {
+		Parent = parent,
+		Name = "WindowGlow",
+		ImageColor3 = themes.preset.glow,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.8999999761581421,
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, -20, 0, -20),
+		Size = UDim2.new(1, 40, 1, 40),
+		ZIndex = 0,
+		BorderSizePixel = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(glow, "glow", "ImageColor3")
+	library:apply_theme(glow, "accent", "ImageColor3")
+	return glow
+end
+
 function library:window(properties)
 	local cfg = {
 		name = properties.Name or properties.name or properties.Title or properties.title or "sp4m.wtf",
@@ -524,8 +549,7 @@ function library:window(properties)
 		Active = true,
 		Draggable = true,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 0, 40),
+		Size = UDim2.new(0, ((#animated_text / 2) * 5) + 13, 0, 40),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -556,8 +580,7 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, -4),
+		Size = UDim2.new(1, -4, 1, -4),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
@@ -567,8 +590,7 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(57, 57, 57),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, -4),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
 
@@ -577,8 +599,7 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 6, 0, 6),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, -12),
+		Size = UDim2.new(1, -12, 1, -12),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(19, 19, 19),
 	})
@@ -588,8 +609,7 @@ function library:window(properties)
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, -4),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(22, 22, 22),
 	})
 
@@ -599,7 +619,7 @@ function library:window(properties)
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = cfg.name .. " | private",
+		Text = "ledger.live",
 		TextStrokeTransparency = 0.5,
 		Size = UDim2.new(0, 0, 1, 0),
 		Position = UDim2.new(0, 8, 0, 0),
@@ -624,8 +644,7 @@ function library:window(properties)
 	local UIPadding = library:create("UIPadding", {
 		Parent = tabs,
 		Name = "",
-		PaddingRight = UDim.new(0, 16),
-		PaddingLeft = UDim.new(0, 0),
+		PaddingRight = UDim.new(0, 21),
 	})
 
 	local glow = library:create("ImageLabel", {
@@ -647,18 +666,14 @@ function library:window(properties)
 
 	library:apply_theme(glow, "accent", "ImageColor3")
 
-	local function fitWatermark()
-		local bounds = name.TextBounds.X
-		local w = math.max(80, bounds + 28)
-		-- keep AutomaticSize; padding already expands parents
-		pcall(function()
-			if inline1.AbsoluteSize.X < w then
-				-- force minimum via padding if needed
-			end
-		end)
+	local function resizeWatermark()
+		local w = math.max(60, (name.TextBounds.X or 0) + 28)
+		inline1.Size = UDim2.new(0, w, 0, 40)
 	end
-	name:GetPropertyChangedSignal("Text"):Connect(fitWatermark)
-	name:GetPropertyChangedSignal("TextBounds"):Connect(fitWatermark)
+	name:GetPropertyChangedSignal("TextBounds"):Connect(resizeWatermark)
+	name:GetPropertyChangedSignal("Text"):Connect(resizeWatermark)
+	task.defer(resizeWatermark)
+	library:add_window_glow(inline1)
 
 	task.spawn(function()
 		while true do
@@ -666,7 +681,7 @@ function library:window(properties)
 				for i = 1, #animated_text do
 					task.wait(0.2)
 					name.Text = animated_text[i]
-					fitWatermark()
+					resizeWatermark()
 				end
 			end
 			task.wait(0.2)
@@ -689,6 +704,7 @@ function library:window(properties)
 	table.insert(library.main_frame, inline1)
 	local WINDOW_PATH = inline1
 	library:make_resizable(inline1)
+	library:add_window_glow(inline1)
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
@@ -765,6 +781,7 @@ function library:window(properties)
 		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 26),
 	})
 	table.insert(library.main_frame, title_bar)
+	library:add_window_glow(title_bar)
 
 	local title_accent = library:create("Frame", {
 		Parent = title_bar,
@@ -804,7 +821,7 @@ function library:window(properties)
 		Parent = title_inner,
 		Name = "",
 		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(200, 200, 200),
+		TextColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		Text = cfg.name,
 		TextStrokeTransparency = 0.5,
@@ -815,6 +832,31 @@ function library:window(properties)
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
+
+	local TITLE_GRADIENT = library:create("UIGradient", {
+		Parent = name,
+		Name = "",
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+		}),
+	})
+
+	task.spawn(function()
+		while name.Parent do
+			local t = tick()
+			local a = math.abs(math.sin(t * 1.2))
+			pcall(function()
+				TITLE_GRADIENT.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+				})
+			end)
+			task.wait(0.03)
+		end
+	end)
 
 	-- keep title bar glued above the main window when dragged/resized
 	local function syncTitleBar()
@@ -1627,6 +1669,7 @@ function library:window(properties)
 	library:make_resizable(playerlist)
 
 	table.insert(library.main_frame, playerlist)
+	library:add_window_glow(playerlist)
 
 	local name = library:create("TextLabel", {
 		Parent = playerlist,
@@ -2232,24 +2275,7 @@ function library:window(properties)
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
-	local glow = library:create("ImageLabel", {
-		Parent = old_kblist,
-		Name = "",
-		ImageColor3 = themes.preset.accent,
-		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.8999999761581421,
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		Image = "http://www.roblox.com/asset/?id=18245826428",
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, -20, 0, -20),
-		Size = UDim2.new(1, 40, 0, 42),
-		ZIndex = 2,
-		BorderSizePixel = 0,
-		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
-	})
-
-	library:apply_theme(glow, "accent", "ImageColor3")
+	library:add_window_glow(old_kblist)
 
 	local inline1 = library:create("Frame", {
 		Parent = old_kblist,
@@ -2893,29 +2919,22 @@ function library:section(properties)
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
 
-	-- Section title sits ON the top border with solid bg so the border stops at the text (±2px)
 	local name = library:create("TextLabel", {
 		Parent = section_inline,
 		Name = "",
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "  " .. tostring(cfg.name) .. "  ",
+		Text = cfg.name,
 		TextStrokeTransparency = 0.5,
 		BorderSizePixel = 0,
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 0, 12),
-		BackgroundTransparency = 0,
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 8, 0, -6),
-		ZIndex = 3,
+		Position = UDim2.new(0, 8, 0, 0),
+		ZIndex = 2,
 		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(8, 8, 8), -- match section_inline
-	})
-	library:create("UIPadding", {
-		Parent = name,
-		PaddingLeft = UDim.new(0, 2),
-		PaddingRight = UDim.new(0, 2),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 	})
 
 	local section = library:create("Frame", {
