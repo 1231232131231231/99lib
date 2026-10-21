@@ -215,8 +215,10 @@ function library:unload()
 		uis.MouseIconEnabled = true
 	end)
 	pcall(function()
-		local b = lighting:FindFirstChild("ZoviiMenuBlur")
-		if b then b:Destroy() end
+		for _, p in ipairs({ lighting, camera }) do
+			local b = p:FindFirstChild("ZoviiMenuBlur")
+			if b then b:Destroy() end
+		end
 	end)
 
 	if library.gui then
@@ -504,7 +506,9 @@ library.gui = library:create("ScreenGui", {
 	Parent = coregui,
 	Name = "",
 	DisplayOrder = 2,
-	ZIndexBehavior = 1,
+	ZIndexBehavior = Enum.ZIndexBehavior.Global,
+	IgnoreGuiInset = true,
+	ResetOnSpawn = false,
 })
 
 -- library functions
@@ -2456,7 +2460,7 @@ function library:window(properties)
 		__holder.Visible = bool
 	end
 
-	-- ── Menu backdrop: blur + vignette dim + snow + custom cursor ──────────
+	-- ── Menu backdrop: full-screen blur + dim + snow + nhack cursor ─────────
 	local menu_open = true
 
 	local backdrop = library:create("Frame", {
@@ -2464,160 +2468,138 @@ function library:window(properties)
 		Name = "MenuBackdrop",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, 0),
-		Position = UDim2.new(0, 0, 0, 0),
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0, 0),
 		ZIndex = 0,
 		Active = false,
 	})
 
-	-- Soft full-screen dim (not pure black)
 	local dim = library:create("Frame", {
 		Parent = backdrop,
 		Name = "",
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.5,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, 0),
+		Size = UDim2.fromScale(1, 1),
 		ZIndex = 0,
 	})
 
-	-- Corner vignette panels (darker edges → clearer middle)
 	local function makeVignetteEdge(props)
 		local f = library:create("Frame", {
 			Parent = backdrop,
 			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ZIndex = 0,
 			Size = props.Size,
 			Position = props.Position,
 			AnchorPoint = props.AnchorPoint or Vector2.new(0, 0),
+			BackgroundTransparency = 0,
 		})
-		local g = library:create("UIGradient", {
+		library:create("UIGradient", {
 			Parent = f,
 			Rotation = props.Rotation or 0,
 			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.35),
-				NumberSequenceKeypoint.new(0.55, 0.75),
+				NumberSequenceKeypoint.new(0, 0.3),
+				NumberSequenceKeypoint.new(0.5, 0.7),
 				NumberSequenceKeypoint.new(1, 1),
 			}),
 		})
-		f.BackgroundTransparency = 0
 		return f
 	end
-	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.35, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 90 }) -- top
-	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.35, 0), Position = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(0, 1), Rotation = 270 }) -- bottom
-	makeVignetteEdge({ Size = UDim2.new(0.28, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 0 }) -- left
-	makeVignetteEdge({ Size = UDim2.new(0.28, 0, 1, 0), Position = UDim2.new(1, 0, 0, 0), AnchorPoint = Vector2.new(1, 0), Rotation = 180 }) -- right
+	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.4, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 90 })
+	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.4, 0), Position = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(0, 1), Rotation = 270 })
+	makeVignetteEdge({ Size = UDim2.new(0.32, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 0 })
+	makeVignetteEdge({ Size = UDim2.new(0.32, 0, 1, 0), Position = UDim2.new(1, 0, 0, 0), AnchorPoint = Vector2.new(1, 0), Rotation = 180 })
 
-	-- Snow layer
 	local snow_layer = library:create("Frame", {
 		Parent = backdrop,
 		Name = "Snow",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, 0),
+		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		ClipsDescendants = true,
 	})
 
-	local snowflakes = {}
-	local SNOW_COUNT = 48
-	local rng = Random.new()
-	for i = 1, SNOW_COUNT do
-		local sz = rng:NextInteger(2, 5)
-		local flake = library:create("Frame", {
-			Parent = snow_layer,
-			BorderSizePixel = 0,
-			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-			BackgroundTransparency = rng:NextNumber(0.15, 0.55),
-			Size = UDim2.fromOffset(sz, sz),
-			Position = UDim2.new(rng:NextNumber(0, 1), 0, rng:NextNumber(-0.1, 1), 0),
-			ZIndex = 1,
-		})
-		library:create("UICorner", { Parent = flake, CornerRadius = UDim.new(1, 0) })
-		snowflakes[i] = {
-			inst = flake,
-			speed = rng:NextNumber(25, 70),
-			drift = rng:NextNumber(-18, 18),
-			x = flake.Position.X.Scale,
-			y = flake.Position.Y.Scale,
-		}
-	end
+	local SNOW_ASSET = "http://www.roblox.com/asset/?id=6871196088" -- nhack snow
+	local snow_active = true
+	task.spawn(function()
+		local rng = Random.new()
+		while snow_layer.Parent do
+			if not (menu_open and snow_active) then
+				task.wait(0.15)
+				continue
+			end
+			local w = snow_layer.AbsoluteSize.X
+			local h = snow_layer.AbsoluteSize.Y
+			if w <= 0 or h <= 0 then
+				task.wait(0.1)
+				continue
+			end
+			local sz = rng:NextInteger(5, 8)
+			local spawnX = rng:NextInteger(0, math.max(0, w - sz))
+			local flake = Instance.new("ImageLabel")
+			flake.BackgroundTransparency = 1
+			flake.Image = SNOW_ASSET
+			flake.Size = UDim2.fromOffset(sz, sz)
+			flake.Position = UDim2.fromOffset(spawnX, -10)
+			flake.ZIndex = 1
+			flake.Parent = snow_layer
+			local fall = rng:NextNumber(2.0, 4.0)
+			local sway = rng:NextInteger(-18, 18)
+			local tw = tween_service:Create(
+				flake,
+				TweenInfo.new(fall, Enum.EasingStyle.Linear),
+				{ Position = UDim2.fromOffset(spawnX + sway, h + 10), ImageTransparency = 1 }
+			)
+			tw:Play()
+			tw.Completed:Connect(function()
+				flake:Destroy()
+			end)
+			task.wait(rng:NextNumber(0.04, 0.12))
+		end
+	end)
 
+	-- Blur on Camera (nhack-style) so it affects the whole world view
 	local blur_fx = Instance.new("BlurEffect")
 	blur_fx.Name = "ZoviiMenuBlur"
 	blur_fx.Size = 0
-	blur_fx.Enabled = true
-	blur_fx.Parent = lighting
+	blur_fx.Parent = camera
 	table.insert(library.instances, blur_fx)
 
-	-- Custom cursor (small + border), only while menu open
-	local cursor_gui = library:create("Frame", {
+	-- nhack cursor asset
+	local cursor_gui = library:create("ImageLabel", {
 		Parent = library.gui,
 		Name = "CustomCursor",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(16, 16),
-		ZIndex = 100,
+		Image = "http://www.roblox.com/asset/?id=5545698398",
+		Size = UDim2.fromOffset(28, 28),
+		ZIndex = 10000,
 		Visible = false,
-	})
-	local cursor_img = library:create("ImageLabel", {
-		Parent = cursor_gui,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(14, 14),
-		Position = UDim2.fromOffset(1, 1),
-		Image = "rbxassetid://13956623874",
 		ScaleType = Enum.ScaleType.Fit,
-		ZIndex = 101,
-	})
-	local cursor_stroke = library:create("UIStroke", {
-		Parent = cursor_img,
-		Color = themes.preset.accent,
-		Thickness = 1,
-		Transparency = 0.2,
 	})
 
-	local snow_conn
 	local function set_backdrop(open)
-		menu_open = open
-		backdrop.Visible = open
-		cursor_gui.Visible = open
+		menu_open = open and true or false
+		backdrop.Visible = menu_open
+		cursor_gui.Visible = menu_open
 		pcall(function()
-			blur_fx.Size = open and 16 or 0
+			local target = menu_open and 18 or 0
+			tween_service:Create(blur_fx, TweenInfo.new(0.25), { Size = target }):Play()
 		end)
 		pcall(function()
-			if open then
-				uis.MouseIconEnabled = false
-			else
-				uis.MouseIconEnabled = true
-			end
+			uis.MouseIconEnabled = not menu_open
 		end)
 	end
 
-	snow_conn = library:connection(run.RenderStepped, function(dt)
-		if not menu_open then
+	library:connection(run.RenderStepped, function()
+		if not (menu_open and cursor_gui.Visible) then
 			return
 		end
-		-- snow
-		for _, s in ipairs(snowflakes) do
-			s.y = s.y + (s.speed * dt) / 600
-			s.x = s.x + (s.drift * dt) / 900
-			if s.y > 1.05 then
-				s.y = rng:NextNumber(-0.08, -0.01)
-				s.x = rng:NextNumber(0, 1)
-			end
-			if s.x < -0.05 then s.x = 1.05 end
-			if s.x > 1.05 then s.x = -0.05 end
-			s.inst.Position = UDim2.new(s.x, 0, s.y, 0)
-		end
-		-- cursor follow
-		if cursor_gui.Visible then
-			local m = uis:GetMouseLocation()
-			local inset = gui_service:GetGuiInset()
-			cursor_gui.Position = UDim2.fromOffset(m.X - inset.X - 1, m.Y - inset.Y - 1)
-		end
+		local m = uis:GetMouseLocation()
+		-- IgnoreGuiInset = true → use raw mouse location (nhack style)
+		cursor_gui.Position = UDim2.fromOffset(m.X - 14, m.Y - 14)
 	end)
 
 	set_backdrop(true)
