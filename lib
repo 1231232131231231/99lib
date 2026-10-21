@@ -4540,7 +4540,7 @@ function library:colorpicker(properties)
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
 
-	local alpha = library:create("Frame", {
+	local alpha_frame = library:create("Frame", {
 		Parent = alpha_inline,
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
@@ -4550,7 +4550,7 @@ function library:colorpicker(properties)
 	})
 
 	local alpha_image = library:create("ImageLabel", {
-		Parent = alpha,
+		Parent = alpha_frame,
 		Name = "",
 		ScaleType = Enum.ScaleType.Tile,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
@@ -4811,7 +4811,7 @@ function library:colorpicker(properties)
 		preview_image.ImageTransparency = 1 - a
 
 		sat.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-		alpha.BackgroundColor3 = Color
+		alpha_frame.BackgroundColor3 = Color
 		alpha_cursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		alpha_cursor.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		if sat_cursor_fill then
@@ -4906,7 +4906,7 @@ function library:colorpicker(properties)
 	fade_alpha.MouseButton1Down:Connect(function()
 		selected.BackgroundTransparency = 1
 		selected = "fade_alpha"
-		fade_alpha.BackgroundTransparency = 0
+		fade_alpha_frame.BackgroundTransparency = 0
 
 		flags[cfg.flag]["animation"] = "fade_alpha"
 		cfg.saved_color = hsv(s, s, v)
