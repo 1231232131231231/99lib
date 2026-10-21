@@ -703,20 +703,122 @@ function library:window(properties)
 	end)
 	--
 
-	-- window
-	local inline1 = library:create("Frame", {
+	-- window shell (title bar + body glued — never desync)
+	local TITLE_H = 24
+	local shell = library:create("Frame", {
 		Parent = library.gui,
-		Name = "",
+		Name = "WindowShell",
 		Active = true,
 		Draggable = true,
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2),
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Size = UDim2.new(0, cfg.size.X.Offset, 0, cfg.size.Y.Offset + TITLE_H + 4),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -(cfg.size.Y.Offset + TITLE_H) / 2),
+	})
+	table.insert(library.main_frame, shell)
+
+	local title_bar = library:create("Frame", {
+		Parent = shell,
+		Name = "TitleBar",
+		BorderColor3 = Color3.fromRGB(8, 8, 8),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		ZIndex = 3,
+		Size = UDim2.new(1, 0, 0, TITLE_H),
+		Position = UDim2.new(0, 0, 0, 0),
+	})
+	library:add_window_glow(title_bar)
+
+	local title_accent = library:create("Frame", {
+		Parent = title_bar,
+		Name = "",
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = themes.preset.accent,
+	})
+	library:apply_theme(title_accent, "accent", "BackgroundColor3")
+
+	local title_glow = library:create("ImageLabel", {
+		Parent = title_bar,
+		Name = "",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.9,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -20, 0, -18),
+		Size = UDim2.new(1, 40, 0, 40),
+		ZIndex = 2,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(title_glow, "accent", "ImageColor3")
+
+	local title_inner = library:create("Frame", {
+		Parent = title_bar,
+		Name = "",
+		Position = UDim2.new(0, 2, 0, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
+	})
+
+	local title_name = library:create("TextLabel", {
+		Parent = title_inner,
+		Name = "",
+		FontFace = library.font,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 0,
+		Text = cfg.name,
+		TextStrokeTransparency = 0.5,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -12, 0, 14),
+		ZIndex = 4,
+		TextSize = 13,
+		TextScaled = false,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+
+	local TITLE_GRADIENT = library:create("UIGradient", {
+		Parent = title_name,
+		Name = "",
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+		}),
+	})
+
+	task.spawn(function()
+		while title_name.Parent do
+			local a = math.abs(math.sin(tick() * 1.2))
+			pcall(function()
+				TITLE_GRADIENT.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+				})
+			end)
+			task.wait(0.03)
+		end
+	end)
+
+	local inline1 = library:create("Frame", {
+		Parent = shell,
+		Name = "",
+		Active = true,
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		ZIndex = 2,
-		Size = cfg.size,
+		Size = UDim2.new(1, 0, 0, cfg.size.Y.Offset),
+		Position = UDim2.new(0, 0, 0, TITLE_H + 4),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 	table.insert(library.main_frame, inline1)
-	local WINDOW_PATH = inline1
+	local WINDOW_PATH = shell
 	library:make_resizable(inline1)
 	library:add_window_glow(inline1)
 
@@ -745,7 +847,7 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 4),
-		Size = UDim2.new(1, -32, 0, 0),
+		Size = UDim2.new(1, -32, 0, 22),
 		ZIndex = 2,
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
@@ -783,213 +885,6 @@ function library:window(properties)
 	})
 
 	cfg["tab_instance_holder"] = tabs
-
-	-- Title bar ABOVE main window (secrethaxx-style): accent + glow + readable title
-	local title_bar = library:create("Frame", {
-		Parent = library.gui,
-		Name = "TitleBar",
-		BorderColor3 = Color3.fromRGB(8, 8, 8),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 3,
-		Active = true,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, 24),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 28),
-	})
-	table.insert(library.main_frame, title_bar)
-	library:add_window_glow(title_bar)
-
-	local title_accent = library:create("Frame", {
-		Parent = title_bar,
-		Name = "",
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 2),
-		BackgroundColor3 = themes.preset.accent,
-	})
-	library:apply_theme(title_accent, "accent", "BackgroundColor3")
-
-	local title_glow = library:create("ImageLabel", {
-		Parent = title_bar,
-		Name = "",
-		ImageColor3 = themes.preset.accent,
-		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.9,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -20, 0, -18),
-		Size = UDim2.new(1, 40, 0, 40),
-		ZIndex = 2,
-		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
-	})
-	library:apply_theme(title_glow, "accent", "ImageColor3")
-
-	local title_inner = library:create("Frame", {
-		Parent = title_bar,
-		Name = "",
-		Position = UDim2.new(0, 2, 0, 2),
-		Size = UDim2.new(1, -4, 1, -4),
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
-	})
-
-	-- Fixed natural text size, centered equally (no vertical stretch)
-	local name = library:create("TextLabel", {
-		Parent = title_inner,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-		Text = cfg.name,
-		TextStrokeTransparency = 0.5,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, -12, 0, 14),
-		ZIndex = 4,
-		TextSize = 13,
-		TextScaled = false,
-		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-
-	local TITLE_GRADIENT = library:create("UIGradient", {
-		Parent = name,
-		Name = "",
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-		}),
-	})
-
-	task.spawn(function()
-		while name.Parent do
-			local t = tick()
-			local a = math.abs(math.sin(t * 1.2))
-			pcall(function()
-				TITLE_GRADIENT.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
-					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-				})
-			end)
-			task.wait(0.03)
-		end
-	end)
-
-	-- keep title bar glued above the main window when dragged/resized
-	local dragging_from_title = false
-	local title_drag_start
-	local win_start_pos
-
-	local function syncTitleBar()
-		if dragging_from_title then
-			return
-		end
-		pcall(function()
-			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
-			title_bar.Position = UDim2.new(
-				0,
-				inline1.AbsolutePosition.X,
-				0,
-				inline1.AbsolutePosition.Y - 28
-			)
-		end)
-	end
-
-	local function moveWindowTo(abs_x, abs_y)
-		inline1.Position = UDim2.new(0, abs_x, 0, abs_y)
-		title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
-		title_bar.Position = UDim2.new(0, abs_x, 0, abs_y - 28)
-	end
-
-	-- Drag the whole menu from the title bar
-	library:connection(title_bar.InputBegan, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging_from_title = true
-			title_drag_start = input.Position
-			win_start_pos = inline1.AbsolutePosition
-		end
-	end)
-	library:connection(title_bar.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging_from_title = false
-			syncTitleBar()
-		end
-	end)
-	library:connection(uis.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if dragging_from_title then
-				dragging_from_title = false
-				syncTitleBar()
-			end
-		end
-	end)
-	library:connection(uis.InputChanged, function(input)
-		if dragging_from_title and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local delta = input.Position - title_drag_start
-			moveWindowTo(win_start_pos.X + delta.X, win_start_pos.Y + delta.Y)
-		elseif input.UserInputType == Enum.UserInputType.MouseMovement and title_bar.Parent and not dragging_from_title then
-			syncTitleBar()
-		end
-	end)
-
-	library:connection(inline1:GetPropertyChangedSignal("AbsolutePosition"), syncTitleBar)
-	library:connection(inline1:GetPropertyChangedSignal("AbsoluteSize"), syncTitleBar)
-	task.defer(syncTitleBar)
-
-	-- thin accent still on main window top edge
-	local accent_line = library:create("Frame", {
-		Parent = inline1,
-		Name = "",
-		BorderColor3 = Color3.fromRGB(34, 34, 34),
-		Size = UDim2.new(1, 0, 0, 2),
-		BorderSizePixel = 0,
-		BackgroundColor3 = themes.preset.accent,
-	})
-	library:apply_theme(accent_line, "accent", "BackgroundColor3")
-
-	local depth = library:create("Frame", {
-		Parent = inline1,
-		Name = "",
-		BackgroundTransparency = 0.5,
-		Position = UDim2.new(0, 0, 0, 1),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 1),
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-	})
-
-	local holder = library:create("Frame", {
-		Parent = inline1,
-		Name = "",
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, 20, 0, 0),
-		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		ZIndex = 2,
-		AutomaticSize = Enum.AutomaticSize.XY,
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-	})
-
-	task.spawn(function()
-		while true do
-			if flags["color_picker_anim_speed"] then
-				library.sin = math.abs(math.sin(tick() * flags["color_picker_anim_speed"]))
-				pcall(function()
-					if TEXT_ANIMATION_GRADIENT then
-						TEXT_ANIMATION_GRADIENT.Color = ColorSequence.new({
-							ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-							ColorSequenceKeypoint.new(math.abs(math.sin(tick())), themes.preset.accent),
-							ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-						})
-					end
-				end)
-			end
-			task.wait()
-		end
-	end)
-	--
 
 	-- esp preview
 	local esp_preview = library:create("Frame", {
@@ -2619,7 +2514,6 @@ function library:window(properties)
 
 	function cfg.set_menu_visibility(bool, pl)
 		WINDOW_PATH.Visible = bool
-		title_bar.Visible = bool
 		playerlist.Visible = flags["player_list"] and bool or false
 		set_backdrop(bool == true)
 	end
@@ -3103,6 +2997,11 @@ function library:tab(properties)
 	end
 
 	TAB_BUTTON.MouseButton1Click:Connect(cfg.open_tab)
+
+	-- open first tab automatically so menu is never blank
+	if not library.current_tab then
+		task.defer(cfg.open_tab)
+	end
 
 	return setmetatable(cfg, library)
 end
