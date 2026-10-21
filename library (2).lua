@@ -777,8 +777,8 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 		ZIndex = 3,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, 26),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 30),
+		Size = UDim2.new(0, cfg.size.X.Offset, 0, 24),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 28),
 	})
 	table.insert(library.main_frame, title_bar)
 	library:add_window_glow(title_bar)
@@ -817,6 +817,7 @@ function library:window(properties)
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
 
+	-- Fixed natural text size, centered equally (no vertical stretch)
 	local name = library:create("TextLabel", {
 		Parent = title_inner,
 		Name = "",
@@ -826,11 +827,15 @@ function library:window(properties)
 		Text = cfg.name,
 		TextStrokeTransparency = 0.5,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -8, 1, 0),
-		Position = UDim2.new(0, 4, 0, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -12, 0, 14),
 		ZIndex = 4,
-		TextSize = 15,
+		TextSize = 13,
+		TextScaled = false,
+		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
 	})
 
 	local TITLE_GRADIENT = library:create("UIGradient", {
@@ -861,12 +866,12 @@ function library:window(properties)
 	-- keep title bar glued above the main window when dragged/resized
 	local function syncTitleBar()
 		pcall(function()
-			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 26)
+			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
 			title_bar.Position = UDim2.new(
 				0,
 				inline1.AbsolutePosition.X,
 				0,
-				inline1.AbsolutePosition.Y - 30
+				inline1.AbsolutePosition.Y - 28
 			)
 		end)
 	end
