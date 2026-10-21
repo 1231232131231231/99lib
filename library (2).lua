@@ -532,6 +532,9 @@ function library:window(properties)
 	local animated_text = library:animation(cfg.name .. " | private")
 
 	-- watermark
+	-- Block size is FIXED to the full title string. Text animates; frame never shrinks/grows.
+	local watermark_full = cfg.name .. " | private"
+
 	local __holder = library:create("Frame", {
 		Parent = library.gui,
 		Name = "",
@@ -539,20 +542,17 @@ function library:window(properties)
 		Position = UDim2.new(0, 20, 0, 20),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		ZIndex = 2,
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 0, 40), -- set after measure
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
-	-- Full fixed width from longest label (title | private); does NOT shrink/grow with animation
-	local watermark_full = cfg.name .. " | private"
-	local watermark_width = math.max(80, (#watermark_full * 6) + 20) -- approx + side gaps
 	local inline1 = library:create("Frame", {
 		Parent = __holder,
 		Name = "",
 		Active = true,
 		Draggable = true,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(0, watermark_width, 0, 40),
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -614,6 +614,7 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
 		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(22, 22, 22),
+		ClipsDescendants = true,
 	})
 
 	local name = library:create("TextLabel", {
@@ -622,14 +623,13 @@ function library:window(properties)
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "ledger.live",
+		Text = watermark_full,
 		TextStrokeTransparency = 0.5,
-		Size = UDim2.new(0, 0, 1, 0),
-		Position = UDim2.new(0, 8, 0, 0),
+		Size = UDim2.new(1, -6, 1, 0),
+		Position = UDim2.new(0, 3, 0, 0),
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BorderSizePixel = 0,
-		AutomaticSize = Enum.AutomaticSize.X,
 		TextSize = 12,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 	})
@@ -642,13 +642,6 @@ function library:window(properties)
 			ColorSequenceKeypoint.new(0.01, themes.preset.accent),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
 		}),
-	})
-
-	local UIPadding = library:create("UIPadding", {
-		Parent = tabs,
-		Name = "",
-		PaddingLeft = UDim.new(0, 3),
-		PaddingRight = UDim.new(0, 3),
 	})
 
 	local glow = library:create("ImageLabel", {
@@ -669,26 +662,24 @@ function library:window(properties)
 	})
 
 	library:apply_theme(glow, "accent", "ImageColor3")
-
 	library:add_window_glow(inline1)
 
-	-- Measure real text once for accurate fixed width (+ ~3px side gaps)
+	-- One-time measure of FULL string → lock holder width forever
 	task.defer(function()
 		name.Text = watermark_full
 		task.wait()
-		local gap = 6 -- 3px left + 3px right roughly via padding chain
-		local w = math.max(80, (name.TextBounds.X or 0) + gap + 16)
-		inline1.Size = UDim2.new(0, w, 0, 40)
+		local w = math.max(80, math.ceil((name.TextBounds.X or 0) + 6 + 20)) -- 3px+3px gap + chrome
+		__holder.Size = UDim2.new(0, w, 0, 40)
 		name.Text = animated_text[1] or watermark_full
 	end)
 
 	task.spawn(function()
 		while true do
 			if __holder.Visible then
-				for i = 1, #animated_text do
+				for idx = 1, #animated_text do
 					task.wait(0.2)
-					name.Text = animated_text[i]
-					-- size stays fixed — do not resize
+					name.Text = animated_text[idx]
+					-- NEVER touch __holder.Size / inline1.Size here
 				end
 			end
 			task.wait(0.2)
