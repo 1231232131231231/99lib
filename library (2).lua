@@ -211,14 +211,24 @@ function library.to_screen_point(position)
 end
 
 function library:unload()
-	library.gui:Destroy()
+	pcall(function()
+		uis.MouseIconEnabled = true
+	end)
+	pcall(function()
+		local b = lighting:FindFirstChild("ZoviiMenuBlur")
+		if b then b:Destroy() end
+	end)
+
+	if library.gui then
+		library.gui:Destroy()
+	end
 
 	for _, connection in library.connections do
-		connection:Disconnect()
+		pcall(function() connection:Disconnect() end)
 	end
 
 	for _, item in library.instances do
-		item:Destroy()
+		pcall(function() item:Destroy() end)
 	end
 
 	getgenv().library = nil
@@ -777,6 +787,7 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 		ZIndex = 3,
+		Active = true,
 		Size = UDim2.new(0, cfg.size.X.Offset, 0, 24),
 		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 28),
 	})
@@ -864,7 +875,14 @@ function library:window(properties)
 	end)
 
 	-- keep title bar glued above the main window when dragged/resized
+	local dragging_from_title = false
+	local title_drag_start
+	local win_start_pos
+
 	local function syncTitleBar()
+		if dragging_from_title then
+			return
+		end
 		pcall(function()
 			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
 			title_bar.Position = UDim2.new(
@@ -875,14 +893,46 @@ function library:window(properties)
 			)
 		end)
 	end
-	library:connection(inline1:GetPropertyChangedSignal("AbsolutePosition"), syncTitleBar)
-	library:connection(inline1:GetPropertyChangedSignal("AbsoluteSize"), syncTitleBar)
-	-- also follow while dragging (AbsolutePosition can lag behind Input)
-	library:connection(uis.InputChanged, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement and title_bar.Parent then
+
+	local function moveWindowTo(abs_x, abs_y)
+		inline1.Position = UDim2.new(0, abs_x, 0, abs_y)
+		title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
+		title_bar.Position = UDim2.new(0, abs_x, 0, abs_y - 28)
+	end
+
+	-- Drag the whole menu from the title bar
+	library:connection(title_bar.InputBegan, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging_from_title = true
+			title_drag_start = input.Position
+			win_start_pos = inline1.AbsolutePosition
+		end
+	end)
+	library:connection(title_bar.InputEnded, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging_from_title = false
 			syncTitleBar()
 		end
 	end)
+	library:connection(uis.InputEnded, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging_from_title then
+				dragging_from_title = false
+				syncTitleBar()
+			end
+		end
+	end)
+	library:connection(uis.InputChanged, function(input)
+		if dragging_from_title and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - title_drag_start
+			moveWindowTo(win_start_pos.X + delta.X, win_start_pos.Y + delta.Y)
+		elseif input.UserInputType == Enum.UserInputType.MouseMovement and title_bar.Parent and not dragging_from_title then
+			syncTitleBar()
+		end
+	end)
+
+	library:connection(inline1:GetPropertyChangedSignal("AbsolutePosition"), syncTitleBar)
+	library:connection(inline1:GetPropertyChangedSignal("AbsoluteSize"), syncTitleBar)
 	task.defer(syncTitleBar)
 
 	-- thin accent still on main window top edge
@@ -2406,10 +2456,177 @@ function library:window(properties)
 		__holder.Visible = bool
 	end
 
+	-- ── Menu backdrop: blur + vignette dim + snow + custom cursor ──────────
+	local menu_open = true
+
+	local backdrop = library:create("Frame", {
+		Parent = library.gui,
+		Name = "MenuBackdrop",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
+		Position = UDim2.new(0, 0, 0, 0),
+		ZIndex = 0,
+		Active = false,
+	})
+
+	-- Soft full-screen dim (not pure black)
+	local dim = library:create("Frame", {
+		Parent = backdrop,
+		Name = "",
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 0,
+	})
+
+	-- Corner vignette panels (darker edges → clearer middle)
+	local function makeVignetteEdge(props)
+		local f = library:create("Frame", {
+			Parent = backdrop,
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 0,
+			Size = props.Size,
+			Position = props.Position,
+			AnchorPoint = props.AnchorPoint or Vector2.new(0, 0),
+		})
+		local g = library:create("UIGradient", {
+			Parent = f,
+			Rotation = props.Rotation or 0,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.35),
+				NumberSequenceKeypoint.new(0.55, 0.75),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		})
+		f.BackgroundTransparency = 0
+		return f
+	end
+	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.35, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 90 }) -- top
+	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.35, 0), Position = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(0, 1), Rotation = 270 }) -- bottom
+	makeVignetteEdge({ Size = UDim2.new(0.28, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 0 }) -- left
+	makeVignetteEdge({ Size = UDim2.new(0.28, 0, 1, 0), Position = UDim2.new(1, 0, 0, 0), AnchorPoint = Vector2.new(1, 0), Rotation = 180 }) -- right
+
+	-- Snow layer
+	local snow_layer = library:create("Frame", {
+		Parent = backdrop,
+		Name = "Snow",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 1,
+		ClipsDescendants = true,
+	})
+
+	local snowflakes = {}
+	local SNOW_COUNT = 48
+	local rng = Random.new()
+	for i = 1, SNOW_COUNT do
+		local sz = rng:NextInteger(2, 5)
+		local flake = library:create("Frame", {
+			Parent = snow_layer,
+			BorderSizePixel = 0,
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BackgroundTransparency = rng:NextNumber(0.15, 0.55),
+			Size = UDim2.fromOffset(sz, sz),
+			Position = UDim2.new(rng:NextNumber(0, 1), 0, rng:NextNumber(-0.1, 1), 0),
+			ZIndex = 1,
+		})
+		library:create("UICorner", { Parent = flake, CornerRadius = UDim.new(1, 0) })
+		snowflakes[i] = {
+			inst = flake,
+			speed = rng:NextNumber(25, 70),
+			drift = rng:NextNumber(-18, 18),
+			x = flake.Position.X.Scale,
+			y = flake.Position.Y.Scale,
+		}
+	end
+
+	local blur_fx = Instance.new("BlurEffect")
+	blur_fx.Name = "ZoviiMenuBlur"
+	blur_fx.Size = 0
+	blur_fx.Enabled = true
+	blur_fx.Parent = lighting
+	table.insert(library.instances, blur_fx)
+
+	-- Custom cursor (small + border), only while menu open
+	local cursor_gui = library:create("Frame", {
+		Parent = library.gui,
+		Name = "CustomCursor",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(16, 16),
+		ZIndex = 100,
+		Visible = false,
+	})
+	local cursor_img = library:create("ImageLabel", {
+		Parent = cursor_gui,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(14, 14),
+		Position = UDim2.fromOffset(1, 1),
+		Image = "rbxassetid://13956623874",
+		ScaleType = Enum.ScaleType.Fit,
+		ZIndex = 101,
+	})
+	local cursor_stroke = library:create("UIStroke", {
+		Parent = cursor_img,
+		Color = themes.preset.accent,
+		Thickness = 1,
+		Transparency = 0.2,
+	})
+
+	local snow_conn
+	local function set_backdrop(open)
+		menu_open = open
+		backdrop.Visible = open
+		cursor_gui.Visible = open
+		pcall(function()
+			blur_fx.Size = open and 16 or 0
+		end)
+		pcall(function()
+			if open then
+				uis.MouseIconEnabled = false
+			else
+				uis.MouseIconEnabled = true
+			end
+		end)
+	end
+
+	snow_conn = library:connection(run.RenderStepped, function(dt)
+		if not menu_open then
+			return
+		end
+		-- snow
+		for _, s in ipairs(snowflakes) do
+			s.y = s.y + (s.speed * dt) / 600
+			s.x = s.x + (s.drift * dt) / 900
+			if s.y > 1.05 then
+				s.y = rng:NextNumber(-0.08, -0.01)
+				s.x = rng:NextNumber(0, 1)
+			end
+			if s.x < -0.05 then s.x = 1.05 end
+			if s.x > 1.05 then s.x = -0.05 end
+			s.inst.Position = UDim2.new(s.x, 0, s.y, 0)
+		end
+		-- cursor follow
+		if cursor_gui.Visible then
+			local m = uis:GetMouseLocation()
+			local inset = gui_service:GetGuiInset()
+			cursor_gui.Position = UDim2.fromOffset(m.X - inset.X - 1, m.Y - inset.Y - 1)
+		end
+	end)
+
+	set_backdrop(true)
+
 	function cfg.set_menu_visibility(bool, pl)
 		WINDOW_PATH.Visible = bool
-
+		title_bar.Visible = bool
 		playerlist.Visible = flags["player_list"] and bool or false
+		set_backdrop(bool == true)
 	end
 
 	return setmetatable(cfg, library)
