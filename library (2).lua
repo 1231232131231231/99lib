@@ -543,13 +543,16 @@ function library:window(properties)
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
+	-- Full fixed width from longest label (title | private); does NOT shrink/grow with animation
+	local watermark_full = cfg.name .. " | private"
+	local watermark_width = math.max(80, (#watermark_full * 6) + 20) -- approx + side gaps
 	local inline1 = library:create("Frame", {
 		Parent = __holder,
 		Name = "",
 		Active = true,
 		Draggable = true,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(0, ((#animated_text / 2) * 5) + 13, 0, 40),
+		Size = UDim2.new(0, watermark_width, 0, 40),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -644,7 +647,8 @@ function library:window(properties)
 	local UIPadding = library:create("UIPadding", {
 		Parent = tabs,
 		Name = "",
-		PaddingRight = UDim.new(0, 21),
+		PaddingLeft = UDim.new(0, 3),
+		PaddingRight = UDim.new(0, 3),
 	})
 
 	local glow = library:create("ImageLabel", {
@@ -666,14 +670,17 @@ function library:window(properties)
 
 	library:apply_theme(glow, "accent", "ImageColor3")
 
-	local function resizeWatermark()
-		local w = math.max(60, (name.TextBounds.X or 0) + 28)
-		inline1.Size = UDim2.new(0, w, 0, 40)
-	end
-	name:GetPropertyChangedSignal("TextBounds"):Connect(resizeWatermark)
-	name:GetPropertyChangedSignal("Text"):Connect(resizeWatermark)
-	task.defer(resizeWatermark)
 	library:add_window_glow(inline1)
+
+	-- Measure real text once for accurate fixed width (+ ~3px side gaps)
+	task.defer(function()
+		name.Text = watermark_full
+		task.wait()
+		local gap = 6 -- 3px left + 3px right roughly via padding chain
+		local w = math.max(80, (name.TextBounds.X or 0) + gap + 16)
+		inline1.Size = UDim2.new(0, w, 0, 40)
+		name.Text = animated_text[1] or watermark_full
+	end)
 
 	task.spawn(function()
 		while true do
@@ -681,7 +688,7 @@ function library:window(properties)
 				for i = 1, #animated_text do
 					task.wait(0.2)
 					name.Text = animated_text[i]
-					resizeWatermark()
+					-- size stays fixed — do not resize
 				end
 			end
 			task.wait(0.2)
