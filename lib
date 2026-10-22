@@ -71,12 +71,12 @@ local themes = {
 	preset = {
 		["outline"] = rgb(32, 32, 38), --
 		["inline"] = rgb(60, 55, 75), --
-		["accent"] = rgb(245, 92, 176), -- pink
+		["accent"] = rgb(100, 100, 255), --
 		["contrast"] = rgb(35, 35, 47),
 		["text"] = rgb(170, 170, 170),
 		["unselected_text"] = rgb(90, 90, 90),
 		["text_outline"] = rgb(0, 0, 0),
-		["glow"] = rgb(245, 92, 176),
+		["glow"] = rgb(100, 100, 255),
 	},
 
 	utility = {
@@ -166,17 +166,9 @@ local keys = {
 
 library.__index = library
 
-pcall(function()
-	if not isfolder(library.directory) then
-		makefolder(library.directory)
-	end
-	for _, path in next, library.folders do
-		local full = library.directory .. path
-		if not isfolder(full) then
-			makefolder(full)
-		end
-	end
-end)
+for _, path in next, library.folders do
+	makefolder(library.directory .. path)
+end
 
 if not isfile(library.directory .. "/fonts/main.ttf") then
 	writefile(
@@ -211,28 +203,18 @@ function library.to_screen_point(position)
 end
 
 function library:unload()
+	pcall(function() uis.MouseIconEnabled = true end)
 	pcall(function()
-		uis.MouseIconEnabled = true
+		local b = camera:FindFirstChild("ZoviiMenuBlur")
+		if b then b:Destroy() end
 	end)
-	pcall(function()
-		for _, p in ipairs({ lighting, camera }) do
-			local b = p:FindFirstChild("ZoviiMenuBlur")
-			if b then b:Destroy() end
-		end
-	end)
-
-	if library.gui then
-		library.gui:Destroy()
-	end
-
+	if library.gui then library.gui:Destroy() end
 	for _, connection in library.connections do
 		pcall(function() connection:Disconnect() end)
 	end
-
 	for _, item in library.instances do
 		pcall(function() item:Destroy() end)
 	end
-
 	getgenv().library = nil
 end
 
@@ -353,112 +335,57 @@ function library:config_list_update()
 	end
 
 	local list = {}
-	local dir = library.directory .. "/configs"
-	local ok, files = pcall(function()
-		return listfiles(dir)
-	end)
-	if not ok or type(files) ~= "table" then
-		files = {}
-	end
-
-	for _, file in next, files do
-		if type(file) ~= "string" then
-			continue
-		end
-		-- normalize separators
-		local normalized = string.gsub(file, "\\", "/")
-		local name = normalized:match("([^/]+)%.cfg$") or normalized:match("([^/]+)$")
-		if name and name ~= "" then
-			name = string.gsub(name, "%.cfg$", "")
-			list[#list + 1] = name
-		end
-	end
-
-	table.sort(list)
+	local dir = (library.directory or "ZOVII") .. "/configs"
 	pcall(function()
-		library.config_holder:refresh_options(list)
+		if not isfolder(library.directory or "ZOVII") then makefolder(library.directory or "ZOVII") end
+		if not isfolder(dir) then makefolder(dir) end
 	end)
+
+	local ok, files = pcall(listfiles, dir)
+	if ok and type(files) == "table" then
+		for _, file in next, files do
+			local name = tostring(file):match("([^/\]+)%.cfg$")
+			if name then
+				list[#list + 1] = name
+			end
+		end
+	end
+
+	library.config_holder:refresh_options(list)
 end
 
 function library:get_config()
 	local Config = {}
 
-	for flag, v in pairs(flags) do
+	for _, v in flags do
 		if type(v) == "table" and v.key then
-			Config[flag] = { active = v.active, mode = v.mode, key = tostring(v.key) }
-		elseif type(v) == "table" and v["Transparency"] and typeof(v["Color"]) == "Color3" then
-			Config[flag] = { Transparency = v["Transparency"], Color = v["Color"]:ToHex() }
+			Config[_] = { active = v.active, mode = v.mode, key = tostring(v.key) }
+		elseif type(v) == "table" and v["Transparency"] and v["Color"] then
+			Config[_] = { Transparency = v["Transparency"], Color = v["Color"]:ToHex() }
 		else
-			Config[flag] = v
+			Config[_] = v
 		end
 	end
 
 	return http_service:JSONEncode(Config)
 end
 
-function library:save_config(name)
-	name = tostring(name or "default"):gsub("[^%w%-%_ ]", "")
-	if name == "" then name = "default" end
-	local dir = library.directory .. "/configs"
-	pcall(function()
-		if not isfolder(library.directory) then makefolder(library.directory) end
-		if not isfolder(dir) then makefolder(dir) end
-	end)
-	local path = dir .. "/" .. name .. ".cfg"
-	local ok, err = pcall(function()
-		writefile(path, library:get_config())
-	end)
-	library:config_list_update()
-	return ok, err or path
-end
+function library:load_config(config_json)
+	local config = http_service:JSONDecode(config_json)
 
-function library:delete_config(name)
-	name = tostring(name or ""):gsub("[^%w%-%_ ]", "")
-	if name == "" then return false end
-	local path = library.directory .. "/configs/" .. name .. ".cfg"
-	local ok = pcall(function()
-		if isfile(path) then delfile(path) end
-	end)
-	library:config_list_update()
-	return ok
-end
-
-function library:load_config(config_json_or_name)
-	local config_json = config_json_or_name
-	if type(config_json_or_name) == "string" and not string.find(config_json_or_name, "{", 1, true) then
-		local path = library.directory .. "/configs/" .. tostring(config_json_or_name) .. ".cfg"
-		local ok, data = pcall(function()
-			return readfile(path)
-		end)
-		if not ok or type(data) ~= "string" then
-			library:notification({ text = "Config not found: " .. tostring(config_json_or_name) })
-			return false
-		end
-		config_json = data
-	end
-
-	local ok, config = pcall(function()
-		return http_service:JSONDecode(config_json)
-	end)
-	if not ok or type(config) ~= "table" then
-		library:notification({ text = "Invalid config JSON" })
-		return false
-	end
-
-	for flag, v in next, config do
-		local function_set = library.config_flags[flag]
+	for _, v in next, config do
+		local function_set = library.config_flags[_]
 
 		if function_set then
 			if type(v) == "table" and v["Transparency"] and v["Color"] then
-				pcall(function_set, hex(v["Color"]), v["Transparency"])
-			elseif type(v) == "table" and v["active"] ~= nil then
-				pcall(function_set, v)
+				function_set(hex(v["Color"]), v["Transparency"])
+			elseif type(v) == "table" and v["active"] then
+				function_set(v)
 			else
-				pcall(function_set, v)
+				function_set(v)
 			end
 		end
 	end
-	return true
 end
 
 function library:round(number, float)
@@ -512,31 +439,6 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
-
-function library:add_window_glow(parent)
-	if not parent then return end
-	-- same glow asset / theme binding used on tabs, toggles, accent lines
-	local glow = library:create("ImageLabel", {
-		Parent = parent,
-		Name = "WindowGlow",
-		ImageColor3 = themes.preset.glow,
-		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.8999999761581421,
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		Image = "http://www.roblox.com/asset/?id=18245826428",
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, -20, 0, -20),
-		Size = UDim2.new(1, 40, 1, 40),
-		ZIndex = 0,
-		BorderSizePixel = 0,
-		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
-	})
-	library:apply_theme(glow, "glow", "ImageColor3")
-	library:apply_theme(glow, "accent", "ImageColor3")
-	return glow
-end
-
 function library:window(properties)
 	local cfg = {
 		name = properties.Name or properties.name or properties.Title or properties.title or "sp4m.wtf",
@@ -546,9 +448,6 @@ function library:window(properties)
 	local animated_text = library:animation(cfg.name .. " | private")
 
 	-- watermark
-	-- Block size is FIXED to the full title string. Text animates; frame never shrinks/grows.
-	local watermark_full = cfg.name .. " | private"
-
 	local __holder = library:create("Frame", {
 		Parent = library.gui,
 		Name = "",
@@ -556,7 +455,7 @@ function library:window(properties)
 		Position = UDim2.new(0, 20, 0, 20),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		ZIndex = 2,
-		Size = UDim2.new(0, 0, 0, 40), -- set after measure
+		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -566,7 +465,7 @@ function library:window(properties)
 		Active = true,
 		Draggable = true,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Size = UDim2.new(1, 0, 1, 0),
+		Size = UDim2.new(0, ((#animated_text / 2) * 5) + 13, 0, 40),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -628,7 +527,6 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
 		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(22, 22, 22),
-		ClipsDescendants = true,
 	})
 
 	local name = library:create("TextLabel", {
@@ -637,14 +535,14 @@ function library:window(properties)
 		FontFace = library.font,
 		TextColor3 = Color3.fromRGB(170, 170, 170),
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = watermark_full,
+		Text = "ledger.live",
 		TextStrokeTransparency = 0.5,
-		Size = UDim2.new(1, -8, 1, 0),
-		Position = UDim2.new(0, 4, 0, 0),
+		Size = UDim2.new(0, 0, 1, 0),
+		Position = UDim2.new(0, 8, 0, 0),
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.None,
 		BorderSizePixel = 0,
+		AutomaticSize = Enum.AutomaticSize.X,
 		TextSize = 12,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 	})
@@ -657,6 +555,12 @@ function library:window(properties)
 			ColorSequenceKeypoint.new(0.01, themes.preset.accent),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
 		}),
+	})
+
+	local UIPadding = library:create("UIPadding", {
+		Parent = tabs,
+		Name = "",
+		PaddingRight = UDim.new(0, 21),
 	})
 
 	local glow = library:create("ImageLabel", {
@@ -677,25 +581,13 @@ function library:window(properties)
 	})
 
 	library:apply_theme(glow, "accent", "ImageColor3")
-	library:add_window_glow(inline1)
-
-	-- One-time measure of FULL string → lock holder width forever
-	task.defer(function()
-		name.Text = watermark_full
-		task.wait()
-		-- TextBounds + left text inset (3) + right gap (~8) + nested chrome (~24)
-		local w = math.max(100, math.ceil((name.TextBounds.X or 0) + 40))
-		__holder.Size = UDim2.new(0, w, 0, 40)
-		name.Text = animated_text[1] or watermark_full
-	end)
 
 	task.spawn(function()
 		while true do
 			if __holder.Visible then
-				for idx = 1, #animated_text do
+				for i = 1, #animated_text do
 					task.wait(0.2)
-					name.Text = animated_text[idx]
-					-- NEVER touch __holder.Size / inline1.Size here
+					name.Text = animated_text[i]
 				end
 			end
 			task.wait(0.2)
@@ -703,124 +595,21 @@ function library:window(properties)
 	end)
 	--
 
-	-- window shell (title bar + body glued — never desync)
-	local TITLE_H = 24
-	local shell = library:create("Frame", {
+	-- window
+	local inline1 = library:create("Frame", {
 		Parent = library.gui,
-		Name = "WindowShell",
+		Name = "",
 		Active = true,
 		Draggable = true,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		ZIndex = 2,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, cfg.size.Y.Offset + TITLE_H + 4),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -(cfg.size.Y.Offset + TITLE_H) / 2),
-	})
-	table.insert(library.main_frame, shell)
-
-	local title_bar = library:create("Frame", {
-		Parent = shell,
-		Name = "TitleBar",
-		BorderColor3 = Color3.fromRGB(8, 8, 8),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 3,
-		Size = UDim2.new(1, 0, 0, TITLE_H),
-		Position = UDim2.new(0, 0, 0, 0),
-	})
-	library:add_window_glow(title_bar)
-
-	local title_accent = library:create("Frame", {
-		Parent = title_bar,
-		Name = "",
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 2),
-		BackgroundColor3 = themes.preset.accent,
-	})
-	library:apply_theme(title_accent, "accent", "BackgroundColor3")
-
-	local title_glow = library:create("ImageLabel", {
-		Parent = title_bar,
-		Name = "",
-		ImageColor3 = themes.preset.accent,
-		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.9,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -20, 0, -18),
-		Size = UDim2.new(1, 40, 0, 40),
-		ZIndex = 2,
-		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
-	})
-	library:apply_theme(title_glow, "accent", "ImageColor3")
-
-	local title_inner = library:create("Frame", {
-		Parent = title_bar,
-		Name = "",
-		Position = UDim2.new(0, 2, 0, 2),
-		Size = UDim2.new(1, -4, 1, -4),
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
-	})
-
-	local title_name = library:create("TextLabel", {
-		Parent = title_inner,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-		Text = cfg.name,
-		TextStrokeTransparency = 0.5,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, -12, 0, 14),
-		ZIndex = 4,
-		TextSize = 13,
-		TextScaled = false,
-		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-
-	local TITLE_GRADIENT = library:create("UIGradient", {
-		Parent = title_name,
-		Name = "",
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-		}),
-	})
-
-	task.spawn(function()
-		while title_name.Parent do
-			local a = math.abs(math.sin(tick() * 1.2))
-			pcall(function()
-				TITLE_GRADIENT.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
-					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-				})
-			end)
-			task.wait(0.03)
-		end
-	end)
-
-	local inline1 = library:create("Frame", {
-		Parent = shell,
-		Name = "",
-		Active = true,
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2),
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		ZIndex = 2,
-		Size = UDim2.new(1, 0, 0, cfg.size.Y.Offset),
-		Position = UDim2.new(0, 0, 0, TITLE_H + 4),
+		Size = cfg.size,
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 	table.insert(library.main_frame, inline1)
-	local WINDOW_PATH = shell
+	local WINDOW_PATH = inline1
 	library:make_resizable(inline1)
-	library:add_window_glow(inline1)
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
@@ -847,7 +636,7 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 4),
-		Size = UDim2.new(1, -32, 0, 22),
+		Size = UDim2.new(1, -32, 0, 0),
 		ZIndex = 2,
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
@@ -885,6 +674,90 @@ function library:window(properties)
 	})
 
 	cfg["tab_instance_holder"] = tabs
+
+	local accent_line = library:create("Frame", {
+		Parent = inline1,
+		Name = "",
+		BorderColor3 = Color3.fromRGB(34, 34, 34),
+		Size = UDim2.new(1, 0, 0, 2),
+		BorderSizePixel = 0,
+		BackgroundColor3 = themes.preset.accent,
+	})
+
+	library:apply_theme(accent_line, "accent", "BackgroundColor3")
+
+	local name = library:create("TextLabel", {
+		Parent = inline1,
+		Name = "",
+		FontFace = library.font,
+		TextColor3 = Color3.fromRGB(170, 170, 170),
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		Text = cfg.name,
+		TextStrokeTransparency = 0.5,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, -1),
+		Size = UDim2.new(1, 0, 0, 1),
+		ZIndex = 2,
+		TextSize = 12,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	})
+
+	local glow = library:create("ImageLabel", {
+		Parent = inline1,
+		Name = "",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.8999999761581421,
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, -20, 0, -20),
+		Size = UDim2.new(1, 40, 0, 42),
+		ZIndex = 2,
+		BorderSizePixel = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(glow, "accent", "ImageColor3")
+
+	local depth = library:create("Frame", {
+		Parent = inline1,
+		Name = "",
+		BackgroundTransparency = 0.5,
+		Position = UDim2.new(0, 0, 0, 1),
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		Size = UDim2.new(1, 0, 0, 1),
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+	})
+
+	local holder = library:create("Frame", {
+		Parent = inline1,
+		Name = "",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, 20, 0, 0),
+		BorderColor3 = Color3.fromRGB(19, 19, 19),
+		ZIndex = 2,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+	})
+
+	task.spawn(function()
+		while true do
+			if flags["color_picker_anim_speed"] then
+				library.sin = math.abs(math.sin(tick() * flags["color_picker_anim_speed"]))
+
+				TEXT_ANIMATION_GRADIENT.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+					ColorSequenceKeypoint.new(math.abs(math.sin(tick())), themes.preset.accent),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+				})
+			end
+			task.wait()
+		end
+	end)
+	--
 
 	-- esp preview
 	local esp_preview = library:create("Frame", {
@@ -1623,7 +1496,6 @@ function library:window(properties)
 	library:make_resizable(playerlist)
 
 	table.insert(library.main_frame, playerlist)
-	library:add_window_glow(playerlist)
 
 	local name = library:create("TextLabel", {
 		Parent = playerlist,
@@ -2229,7 +2101,24 @@ function library:window(properties)
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
-	library:add_window_glow(old_kblist)
+	local glow = library:create("ImageLabel", {
+		Parent = old_kblist,
+		Name = "",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.8999999761581421,
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, -20, 0, -20),
+		Size = UDim2.new(1, 40, 0, 42),
+		ZIndex = 2,
+		BorderSizePixel = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+
+	library:apply_theme(glow, "accent", "ImageColor3")
 
 	local inline1 = library:create("Frame", {
 		Parent = old_kblist,
@@ -2355,7 +2244,7 @@ function library:window(properties)
 		__holder.Visible = bool
 	end
 
-	-- ── Menu backdrop: full-screen blur + dim + snow + nhack cursor ─────────
+	-- Menu open effects (blur / dim / snow / nhack cursor) — does not touch window layout
 	local menu_open = true
 
 	local backdrop = library:create("Frame", {
@@ -2364,153 +2253,93 @@ function library:window(properties)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
-		Position = UDim2.fromScale(0, 0),
 		ZIndex = 0,
-		Active = false,
 	})
-
-	local dim = library:create("Frame", {
+	library:create("Frame", {
 		Parent = backdrop,
-		Name = "",
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.5,
+		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 0,
 	})
-
-	local function makeVignetteEdge(props)
-		local f = library:create("Frame", {
-			Parent = backdrop,
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BorderSizePixel = 0,
-			ZIndex = 0,
-			Size = props.Size,
-			Position = props.Position,
-			AnchorPoint = props.AnchorPoint or Vector2.new(0, 0),
-			BackgroundTransparency = 0,
-		})
-		library:create("UIGradient", {
-			Parent = f,
-			Rotation = props.Rotation or 0,
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.3),
-				NumberSequenceKeypoint.new(0.5, 0.7),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-		})
-		return f
-	end
-	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.4, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 90 })
-	makeVignetteEdge({ Size = UDim2.new(1, 0, 0.4, 0), Position = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(0, 1), Rotation = 270 })
-	makeVignetteEdge({ Size = UDim2.new(0.32, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), Rotation = 0 })
-	makeVignetteEdge({ Size = UDim2.new(0.32, 0, 1, 0), Position = UDim2.new(1, 0, 0, 0), AnchorPoint = Vector2.new(1, 0), Rotation = 180 })
-
 	local snow_layer = library:create("Frame", {
 		Parent = backdrop,
-		Name = "Snow",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		ClipsDescendants = true,
 	})
-
-	local SNOW_ASSET = "http://www.roblox.com/asset/?id=6871196088" -- nhack snow
-	local snow_active = true
+	local SNOW_ASSET = "http://www.roblox.com/asset/?id=6871196088"
 	task.spawn(function()
 		local rng = Random.new()
 		while snow_layer.Parent do
-			if not (menu_open and snow_active) then
+			if not menu_open then
 				task.wait(0.15)
-				continue
+			else
+				local w, h = snow_layer.AbsoluteSize.X, snow_layer.AbsoluteSize.Y
+				if w > 0 and h > 0 then
+					local sz = rng:NextInteger(5, 8)
+					local sx = rng:NextInteger(0, math.max(0, w - sz))
+					local flake = Instance.new("ImageLabel")
+					flake.BackgroundTransparency = 1
+					flake.Image = SNOW_ASSET
+					flake.Size = UDim2.fromOffset(sz, sz)
+					flake.Position = UDim2.fromOffset(sx, -10)
+					flake.ZIndex = 1
+					flake.Parent = snow_layer
+					local fall = rng:NextNumber(2, 4)
+					local sway = rng:NextInteger(-18, 18)
+					local tw = tween_service:Create(flake, TweenInfo.new(fall, Enum.EasingStyle.Linear), {
+						Position = UDim2.fromOffset(sx + sway, h + 10),
+						ImageTransparency = 1,
+					})
+					tw:Play()
+					tw.Completed:Connect(function() flake:Destroy() end)
+				end
+				task.wait(rng:NextNumber(0.05, 0.12))
 			end
-			local w = snow_layer.AbsoluteSize.X
-			local h = snow_layer.AbsoluteSize.Y
-			if w <= 0 or h <= 0 then
-				task.wait(0.1)
-				continue
-			end
-			local sz = rng:NextInteger(5, 8)
-			local spawnX = rng:NextInteger(0, math.max(0, w - sz))
-			local flake = Instance.new("ImageLabel")
-			flake.BackgroundTransparency = 1
-			flake.Image = SNOW_ASSET
-			flake.Size = UDim2.fromOffset(sz, sz)
-			flake.Position = UDim2.fromOffset(spawnX, -10)
-			flake.ZIndex = 1
-			flake.Parent = snow_layer
-			local fall = rng:NextNumber(2.0, 4.0)
-			local sway = rng:NextInteger(-18, 18)
-			local tw = tween_service:Create(
-				flake,
-				TweenInfo.new(fall, Enum.EasingStyle.Linear),
-				{ Position = UDim2.fromOffset(spawnX + sway, h + 10), ImageTransparency = 1 }
-			)
-			tw:Play()
-			tw.Completed:Connect(function()
-				flake:Destroy()
-			end)
-			task.wait(rng:NextNumber(0.04, 0.12))
 		end
 	end)
 
-	-- Blur on Camera (nhack-style) so it affects the whole world view
 	local blur_fx = Instance.new("BlurEffect")
 	blur_fx.Name = "ZoviiMenuBlur"
-	blur_fx.Size = 0
+	blur_fx.Size = 16
 	blur_fx.Parent = camera
 	table.insert(library.instances, blur_fx)
 
-	-- nhack cursor 1:1 (Library.lua MouseCursor)
+	-- nhack cursor 1:1
 	local cursor_gui = library:create("ImageLabel", {
 		Parent = library.gui,
 		Name = "CustomCursor",
-		Visible = false,
+		Visible = true,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Image = "http://www.roblox.com/asset/?id=5545698398",
 		Size = UDim2.new(0, 36, 0, 36),
 		ZIndex = 10000,
 	})
+	pcall(function()
+		uis.MouseIconEnabled = false
+		uis.MouseBehavior = Enum.MouseBehavior.Default
+	end)
 
-	local mouse_state_before = nil
+	library:connection(run.RenderStepped, function()
+		if not (menu_open and cursor_gui.Visible) then return end
+		local m = uis:GetMouseLocation()
+		cursor_gui.Position = UDim2.new(0, m.X - 18, 0, m.Y - 18)
+	end)
+
 	local function set_backdrop(open)
 		menu_open = open and true or false
 		backdrop.Visible = menu_open
 		cursor_gui.Visible = menu_open
 		pcall(function()
-			local target = menu_open and 18 or 0
-			tween_service:Create(blur_fx, TweenInfo.new(0.25), { Size = target }):Play()
-		end)
-		-- nhack ApplyWindowInputState
-		pcall(function()
-			if menu_open then
-				mouse_state_before = {
-					MouseBehavior = uis.MouseBehavior,
-					MouseIconEnabled = uis.MouseIconEnabled,
-				}
-				uis.MouseBehavior = Enum.MouseBehavior.Default
-				uis.MouseIconEnabled = false
-			elseif mouse_state_before then
-				uis.MouseBehavior = mouse_state_before.MouseBehavior or Enum.MouseBehavior.Default
-				uis.MouseIconEnabled = mouse_state_before.MouseIconEnabled ~= false
-				mouse_state_before = nil
-			else
-				uis.MouseIconEnabled = true
-			end
+			blur_fx.Size = menu_open and 16 or 0
+			uis.MouseIconEnabled = not menu_open
 		end)
 	end
-
-	library:connection(run.RenderStepped, function()
-		if not (menu_open and cursor_gui.Visible) then
-			return
-		end
-		local MouseLocation = uis:GetMouseLocation()
-		cursor_gui.Position = UDim2.new(0, MouseLocation.X - 18, 0, MouseLocation.Y - 18)
-	end)
-
-	set_backdrop(true)
 
 	function cfg.set_menu_visibility(bool, pl)
 		WINDOW_PATH.Visible = bool
@@ -2997,11 +2826,6 @@ function library:tab(properties)
 	end
 
 	TAB_BUTTON.MouseButton1Click:Connect(cfg.open_tab)
-
-	-- open first tab automatically so menu is never blank
-	if not library.current_tab then
-		task.defer(cfg.open_tab)
-	end
 
 	return setmetatable(cfg, library)
 end
@@ -4314,7 +4138,7 @@ function library:colorpicker(properties)
 	local picker_inline = library:create("Frame", {
 		Parent = library.gui,
 		Name = "",
-		Size = UDim2.new(0, 200, 0, 210),
+		Size = UDim2.new(0, 142, 0, 146),
 		Position = dim2(0, icon_inline.AbsolutePosition.X + 1, 0, icon_inline.AbsolutePosition.Y + 17),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		ZIndex = 9999,
@@ -4338,7 +4162,7 @@ function library:colorpicker(properties)
 		Text = "",
 		Position = UDim2.new(0, 4, 0, 4),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		Size = UDim2.new(1, -10, 1, -62),
+		Size = UDim2.new(1, -8, 1, -50),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
@@ -4398,22 +4222,9 @@ function library:colorpicker(properties)
 		Parent = sat_black,
 		Name = "",
 		Position = UDim2.new(0.800000011920929, 0, 0.20000000298023224, 0),
-		BorderColor3 = Color3.fromRGB(255, 255, 255),
-		Size = UDim2.new(0, 6, 0, 6),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 1,
-		ZIndex = 5,
-	})
-	-- inner shows the actual selected color
-	local sat_cursor_fill = library:create("Frame", {
-		Parent = sat_black_cursor,
-		Name = "",
-		Position = UDim2.new(0, 1, 0, 1),
-		Size = UDim2.new(1, -2, 1, -2),
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		ZIndex = 6,
+		BorderColor3 = Color3.fromRGB(108, 22, 22),
+		Size = UDim2.new(0, 1, 0, 1),
+		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
 	})
 
 	local preview_inline = library:create("Frame", {
@@ -4533,24 +4344,24 @@ function library:colorpicker(properties)
 		Parent = picker,
 		Name = "",
 		Text = "",
-		Position = UDim2.new(0, 5, 1, -34),
+		Position = UDim2.new(0, 4, 1, -32),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		Size = UDim2.new(1, -10, 0, 12),
+		Size = UDim2.new(1, -8, 0, 10),
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(8, 8, 8),
 	})
 
-	local alpha_frame = library:create("Frame", {
+	local alpha = library:create("Frame", {
 		Parent = alpha_inline,
 		Name = "",
 		Position = UDim2.new(0, 2, 0, 2),
 		BorderColor3 = Color3.fromRGB(56, 56, 56),
 		Size = UDim2.new(1, -4, 1, -4),
-		BackgroundColor3 = themes.preset.accent,
+		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
 	})
 
 	local alpha_image = library:create("ImageLabel", {
-		Parent = alpha_frame,
+		Parent = alpha,
 		Name = "",
 		ScaleType = Enum.ScaleType.Tile,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
@@ -4575,9 +4386,9 @@ function library:colorpicker(properties)
 		Parent = alpha_image,
 		Name = "",
 		Position = UDim2.new(0.5, 0, 0, 0),
-		BorderColor3 = Color3.fromRGB(255, 255, 255),
-		Size = UDim2.new(0, 2, 1, 0),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BorderColor3 = Color3.fromRGB(108, 22, 22),
+		Size = UDim2.new(0, 1, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(204, 41, 41),
 	})
 
 	--
@@ -4811,12 +4622,6 @@ function library:colorpicker(properties)
 		preview_image.ImageTransparency = 1 - a
 
 		sat.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-		alpha_frame.BackgroundColor3 = Color
-		alpha_cursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		alpha_cursor.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		if sat_cursor_fill then
-			sat_cursor_fill.BackgroundColor3 = Color
-		end
 
 		local s_offset = (s < 1) and 0 or -3
 		local v_offset = (1 - v < 1) and 0 or -3
@@ -4906,7 +4711,7 @@ function library:colorpicker(properties)
 	fade_alpha.MouseButton1Down:Connect(function()
 		selected.BackgroundTransparency = 1
 		selected = "fade_alpha"
-		fade_alpha_frame.BackgroundTransparency = 0
+		fade_alpha.BackgroundTransparency = 0
 
 		flags[cfg.flag]["animation"] = "fade_alpha"
 		cfg.saved_color = hsv(s, s, v)
