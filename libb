@@ -335,18 +335,17 @@ function library:config_list_update()
 	end
 
 	local list = {}
+
 	local dir = (library.directory or "ZOVII") .. "/configs"
 	pcall(function()
 		if not isfolder(library.directory or "ZOVII") then makefolder(library.directory or "ZOVII") end
 		if not isfolder(dir) then makefolder(dir) end
 	end)
-	local ok, files = pcall(listfiles, dir)
-	if ok and type(files) == "table" then
+	local okFiles, files = pcall(listfiles, dir)
+	if okFiles and type(files) == "table" then
 		for _, file in next, files do
 			local name = tostring(file):match("([^/\\]+)%.cfg$")
-			if name then
-				list[#list + 1] = name
-			end
+			if name then list[#list + 1] = name end
 		end
 	end
 
@@ -431,35 +430,34 @@ library.gui = library:create("ScreenGui", {
 	Enabled = true,
 	Parent = coregui,
 	Name = "",
-	DisplayOrder = 2,
+	DisplayOrder = 50,
 	ZIndexBehavior = Enum.ZIndexBehavior.Global,
 	IgnoreGuiInset = true,
 	ResetOnSpawn = false,
 })
 
-
+-- library functions
 function library:add_window_glow(parent)
 	if not parent then return end
-	local glow = library:create("ImageLabel", {
+	local g = library:create("ImageLabel", {
 		Parent = parent,
 		Name = "WindowGlow",
-		ImageColor3 = themes.preset.glow,
+		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.9,
+		ImageTransparency = 0.85,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -20, 0, -20),
-		Size = UDim2.new(1, 40, 1, 40),
+		Position = UDim2.new(0, -24, 0, -24),
+		Size = UDim2.new(1, 48, 1, 48),
 		ZIndex = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
 	})
-	library:apply_theme(glow, "glow", "ImageColor3")
-	library:apply_theme(glow, "accent", "ImageColor3")
-	return glow
+	library:apply_theme(g, "accent", "ImageColor3")
+	library:apply_theme(g, "glow", "ImageColor3")
+	return g
 end
 
--- library functions
 function library:window(properties)
 	local cfg = {
 		name = properties.Name or properties.name or properties.Title or properties.title or "sp4m.wtf",
@@ -468,16 +466,16 @@ function library:window(properties)
 
 	local animated_text = library:animation(cfg.name .. " | private")
 
-	-- watermark (fixed block size — text animates inside only)
+	-- watermark
 	local watermark_full = cfg.name .. " | private"
 	local __holder = library:create("Frame", {
 		Parent = library.gui,
-		Name = "",
+		Name = "Watermark",
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 20, 0, 20),
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
-		ZIndex = 2,
-		Size = UDim2.new(0, math.max(120, #watermark_full * 7 + 28), 0, 40),
+		ZIndex = 5,
+		Size = UDim2.new(0, math.max(140, #watermark_full * 7 + 40), 0, 40),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
 
@@ -560,8 +558,8 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		Text = watermark_full,
 		TextStrokeTransparency = 0.5,
-		Size = UDim2.new(1, -10, 1, 0),
-		Position = UDim2.new(0, 5, 0, 0),
+		Size = UDim2.new(1, -12, 1, 0),
+		Position = UDim2.new(0, 6, 0, 0),
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BorderSizePixel = 0,
@@ -604,6 +602,14 @@ function library:window(properties)
 
 	library:apply_theme(glow, "accent", "ImageColor3")
 
+	task.defer(function()
+		name.Text = watermark_full
+		task.wait()
+		local w = math.max(140, math.ceil((name.TextBounds.X or 0) + 40))
+		__holder.Size = UDim2.new(0, w, 0, 40)
+		name.Text = animated_text[1] or watermark_full
+	end)
+
 	task.spawn(function()
 		while true do
 			if __holder.Visible then
@@ -617,44 +623,57 @@ function library:window(properties)
 	end)
 	--
 
-	-- window
-	local inline1 = library:create("Frame", {
+	-- window shell: TITLE ABOVE + body (one draggable unit)
+	local TITLE_H = 26
+	local shell = library:create("Frame", {
 		Parent = library.gui,
-		Name = "",
+		Name = "WindowShell",
 		Active = true,
 		Draggable = true,
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2),
-		BorderColor3 = Color3.fromRGB(8, 8, 8),
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
 		ZIndex = 2,
-		Size = cfg.size,
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		Size = UDim2.new(0, cfg.size.X.Offset, 0, cfg.size.Y.Offset + TITLE_H + 6),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -(cfg.size.Y.Offset + TITLE_H + 6) / 2),
 	})
-	table.insert(library.main_frame, inline1)
-	local WINDOW_PATH = inline1
-	library:make_resizable(inline1)
-	library:add_window_glow(inline1)
+	table.insert(library.main_frame, shell)
+	local WINDOW_PATH = shell
 
-	-- title bar above window (glued each frame — does not change window internals)
+	-- === CUSTOM TITLE BAR (zovii.vip) — above main window ===
 	local title_bar = library:create("Frame", {
-		Parent = library.gui,
+		Parent = shell,
 		Name = "TitleBar",
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 3,
-		Active = true,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, 24),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 - 28),
+		ZIndex = 4,
+		Size = UDim2.new(1, 0, 0, TITLE_H),
+		Position = UDim2.new(0, 0, 0, 0),
 	})
-	table.insert(library.main_frame, title_bar)
 	library:add_window_glow(title_bar)
 
 	local title_accent = library:create("Frame", {
 		Parent = title_bar,
+		Name = "",
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 2),
 		BackgroundColor3 = themes.preset.accent,
 	})
 	library:apply_theme(title_accent, "accent", "BackgroundColor3")
+
+	local title_accent_glow = library:create("ImageLabel", {
+		Parent = title_accent,
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.85,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -20, 0, -18),
+		Size = UDim2.new(1, 40, 0, 40),
+		ZIndex = 2,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(title_accent_glow, "accent", "ImageColor3")
 
 	local title_inner = library:create("Frame", {
 		Parent = title_bar,
@@ -675,7 +694,7 @@ function library:window(properties)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(1, -12, 0, 14),
-		ZIndex = 4,
+		ZIndex = 5,
 		TextSize = 13,
 		TextScaled = false,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -690,7 +709,6 @@ function library:window(properties)
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
 		}),
 	})
-
 	task.spawn(function()
 		while title_name.Parent do
 			local a = math.abs(math.sin(tick() * 1.2))
@@ -705,38 +723,20 @@ function library:window(properties)
 		end
 	end)
 
-	-- glue title to window + drag window from title
-	local drag_title = false
-	local drag_start, win_start
-	library:connection(title_bar.InputBegan, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			drag_title = true
-			drag_start = input.Position
-			win_start = inline1.AbsolutePosition
-		end
-	end)
-	library:connection(uis.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			drag_title = false
-		end
-	end)
-	library:connection(run.RenderStepped, function()
-		if drag_title then
-			local m = uis:GetMouseLocation()
-			local delta = m - Vector2.new(drag_start.X, drag_start.Y)
-			-- use absolute mouse vs start
-		end
-		pcall(function()
-			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
-			title_bar.Position = UDim2.new(0, inline1.AbsolutePosition.X, 0, inline1.AbsolutePosition.Y - 28)
-		end)
-	end)
-	library:connection(uis.InputChanged, function(input)
-		if drag_title and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local delta = input.Position - drag_start
-			inline1.Position = UDim2.new(0, win_start.X + delta.X, 0, win_start.Y + delta.Y)
-		end
-	end)
+	-- === MAIN WINDOW BODY (below title) ===
+	local inline1 = library:create("Frame", {
+		Parent = shell,
+		Name = "MainWindow",
+		Active = true,
+		BorderColor3 = Color3.fromRGB(8, 8, 8),
+		ZIndex = 3,
+		Size = UDim2.new(1, 0, 0, cfg.size.Y.Offset),
+		Position = UDim2.new(0, 0, 0, TITLE_H + 6),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+	})
+	table.insert(library.main_frame, inline1)
+	library:make_resizable(inline1)
+	library:add_window_glow(inline1)
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
@@ -2372,7 +2372,7 @@ function library:window(properties)
 		__holder.Visible = bool
 	end
 
-	-- backdrop effects (do not alter window tree)
+	-- menu backdrop + nhack cursor
 	local menu_open = true
 	local backdrop = library:create("Frame", {
 		Parent = library.gui,
@@ -2434,7 +2434,6 @@ function library:window(properties)
 	blur_fx.Parent = camera
 	table.insert(library.instances, blur_fx)
 
-	-- nhack cursor 1:1
 	local cursor_gui = library:create("ImageLabel", {
 		Parent = library.gui,
 		Name = "CustomCursor",
@@ -2459,7 +2458,6 @@ function library:window(properties)
 		menu_open = open and true or false
 		backdrop.Visible = menu_open
 		cursor_gui.Visible = menu_open
-		title_bar.Visible = open and WINDOW_PATH.Visible
 		pcall(function()
 			blur_fx.Size = menu_open and 16 or 0
 			uis.MouseIconEnabled = not menu_open
@@ -2468,7 +2466,6 @@ function library:window(properties)
 
 	function cfg.set_menu_visibility(bool, pl)
 		WINDOW_PATH.Visible = bool
-		title_bar.Visible = bool
 		playerlist.Visible = flags["player_list"] and bool or false
 		set_backdrop(bool == true)
 	end
@@ -2952,11 +2949,9 @@ function library:tab(properties)
 	end
 
 	TAB_BUTTON.MouseButton1Click:Connect(cfg.open_tab)
-
 	if not library.current_tab then
 		task.defer(cfg.open_tab)
 	end
-
 	return setmetatable(cfg, library)
 end
 
