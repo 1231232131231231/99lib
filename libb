@@ -440,17 +440,18 @@ library.gui = library:create("ScreenGui", {
 -- library functions
 function library:add_window_glow(parent)
 	if not parent then return end
+	-- behind the frame, tight peak (~10px) so no empty gap between glow and block
 	local g = library:create("ImageLabel", {
 		Parent = parent,
 		Name = "WindowGlow",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.82,
+		ImageTransparency = 0.75,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -24, 0, -24),
-		Size = UDim2.new(1, 48, 1, 48),
+		Position = UDim2.new(0, -10, 0, -10),
+		Size = UDim2.new(1, 20, 1, 20),
 		ZIndex = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
 	})
@@ -459,33 +460,57 @@ function library:add_window_glow(parent)
 end
 
 function library:attach_title_bar(target_frame, title_text)
-	-- separate title bar ABOVE target_frame (same style as main window)
 	if not target_frame then return end
+	local TITLE_H = 20
+	local GAP = 1
+
+	-- Parented to the window so it stays flush (no AbsolutePosition gap)
 	local bar = library:create("Frame", {
-		Parent = library.gui,
+		Parent = target_frame,
 		Name = "TitleBar",
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 3,
+		ZIndex = 50,
 		Active = true,
-		Size = UDim2.new(0, math.max(80, target_frame.AbsoluteSize.X), 0, 22),
-		Position = UDim2.new(0, target_frame.AbsolutePosition.X, 0, target_frame.AbsolutePosition.Y - 26),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 0, -GAP),
+		Size = UDim2.new(1, 0, 0, TITLE_H),
 	})
-	library:add_window_glow(bar)
+	-- glow on title (tight)
+	local tg = library:create("ImageLabel", {
+		Parent = bar,
+		Name = "WindowGlow",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.82,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -12, 0, -12),
+		Size = UDim2.new(1, 24, 1, 24),
+		ZIndex = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	library:apply_theme(tg, "accent", "ImageColor3")
+
 	local accent = library:create("Frame", {
 		Parent = bar,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 2),
+		ZIndex = 51,
 		BackgroundColor3 = themes.preset.accent,
 	})
 	library:apply_theme(accent, "accent", "BackgroundColor3")
+
 	local inner = library:create("Frame", {
 		Parent = bar,
-		Position = UDim2.new(0, 2, 0, 2),
-		Size = UDim2.new(1, -4, 1, -4),
+		Position = UDim2.new(0, 1, 0, 2),
+		Size = UDim2.new(1, -2, 1, -3),
 		BorderSizePixel = 0,
+		ZIndex = 51,
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
+
 	local label = library:create("TextLabel", {
 		Parent = inner,
 		FontFace = library.font,
@@ -497,11 +522,12 @@ function library:attach_title_bar(target_frame, title_text)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(1, -8, 0, 14),
-		ZIndex = 4,
+		ZIndex = 52,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center,
 	})
+
 	local grad = library:create("UIGradient", {
 		Parent = label,
 		Color = ColorSequence.new({
@@ -523,7 +549,11 @@ function library:attach_title_bar(target_frame, title_text)
 			task.wait(0.03)
 		end
 	end)
-	-- drag target from title
+
+	pcall(function()
+		target_frame.ClipsDescendants = false
+	end)
+
 	local dragging, start, win_start = false, nil, nil
 	library:connection(bar.InputBegan, function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -543,14 +573,7 @@ function library:attach_title_bar(target_frame, title_text)
 			target_frame.Position = UDim2.new(0, win_start.X + d.X, 0, win_start.Y + d.Y)
 		end
 	end)
-	library:connection(run.RenderStepped, function()
-		pcall(function()
-			bar.Visible = target_frame.Visible
-			local w = math.max(60, target_frame.AbsoluteSize.X)
-			bar.Size = UDim2.new(0, w, 0, 22)
-			bar.Position = UDim2.new(0, target_frame.AbsolutePosition.X, 0, target_frame.AbsolutePosition.Y - 26)
-		end)
-	end)
+
 	return bar
 end
 
@@ -810,22 +833,6 @@ function library:window(properties)
 
 	library:apply_theme(accent_line, "accent", "BackgroundColor3")
 
-	local name = library:create("TextLabel", {
-		Parent = inline1,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(170, 170, 170),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = cfg.name,
-		TextStrokeTransparency = 0.5,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, -1),
-		Size = UDim2.new(1, 0, 0, 1),
-		ZIndex = 2,
-		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	})
 
 	local glow = library:create("ImageLabel", {
 		Parent = inline1,
@@ -902,27 +909,6 @@ function library:window(properties)
 	})
 	library:make_resizable(esp_preview)
 
-	local name = library:create("TextLabel", {
-		Parent = esp_preview,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(170, 170, 170),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "esp preview",
-		TextStrokeTransparency = 0.5,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, -1),
-		Size = UDim2.new(1, 0, 0, 1),
-		ZIndex = 2,
-		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	})
-
-	local UIPadding = library:create("UIPadding", {
-		Parent = name,
-		Name = "",
-	})
 
 	local main = library:create("Frame", {
 		Parent = esp_preview,
