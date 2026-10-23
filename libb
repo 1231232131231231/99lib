@@ -433,7 +433,7 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
--- ZOVII_UI_BUILD=DETACHED_v4b
+-- ZOVII_UI_BUILD=DETACHED_v5
 function library:add_window_glow(parent)
 	if not parent then return end
 	local g = library:create("ImageLabel", {
@@ -441,12 +441,12 @@ function library:add_window_glow(parent)
 		Name = "WindowGlow",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.8,
+		ImageTransparency = 0.55,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -12, 0, -12),
-		Size = UDim2.new(1, 24, 1, 24),
+		Position = UDim2.new(0, -14, 0, -14),
+		Size = UDim2.new(1, 28, 1, 28),
 		ZIndex = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
 	})
@@ -458,7 +458,7 @@ end
 function library:attach_title_bar(target_frame, title_text)
 	if not target_frame then return end
 	local TITLE_H = 22
-	local GAP = 1 -- tight to window block
+	local GAP = 1
 
 	local bar = library:create("Frame", {
 		Parent = library.gui,
@@ -467,6 +467,7 @@ function library:attach_title_bar(target_frame, title_text)
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 		ZIndex = 25,
 		Active = true,
+		AnchorPoint = Vector2.new(0, 1), -- bottom of title sits just above window
 		Size = UDim2.new(0, 100, 0, TITLE_H),
 		Position = UDim2.new(0, 0, 0, 0),
 	})
@@ -547,16 +548,13 @@ function library:attach_title_bar(target_frame, title_text)
 		end
 	end)
 
-	-- If root is fully transparent (keybinds), size/position to the first opaque child so header matches the visible block
 	local function get_visual()
 		if target_frame.BackgroundTransparency < 0.99 then
 			return target_frame
 		end
 		for _, c in ipairs(target_frame:GetChildren()) do
-			if c:IsA("GuiObject") and c.Name ~= "WindowGlow" and c.Name ~= "TitleBar" then
-				if c:IsA("Frame") and c.BackgroundTransparency < 0.99 then
-					return c
-				end
+			if c:IsA("Frame") and c.Name ~= "WindowGlow" and c.BackgroundTransparency < 0.99 then
+				return c
 			end
 		end
 		return target_frame
@@ -568,10 +566,10 @@ function library:attach_title_bar(target_frame, title_text)
 			bar.Visible = target_frame.Visible
 			local visual = get_visual()
 			local w = math.max(60, visual.AbsoluteSize.X)
-			local x = visual.AbsolutePosition.X
-			local y = visual.AbsolutePosition.Y - TITLE_H - GAP
+			-- AnchorPoint (0,1): Position = where the BOTTOM of the title sits
+			-- sit GAP px above the visual's top edge
 			bar.Size = UDim2.new(0, w, 0, TITLE_H)
-			bar.Position = UDim2.new(0, x, 0, y)
+			bar.Position = UDim2.new(0, visual.AbsolutePosition.X, 0, visual.AbsolutePosition.Y - GAP)
 		end)
 	end)
 
@@ -2721,13 +2719,15 @@ function library:tab(properties)
 		Name = "",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.8999999761581421,
+		ImageTransparency = 0.65,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		Image = "http://www.roblox.com/asset/?id=18245826428",
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, -20, 0, -20),
-		Size = UDim2.new(1, 40, 1, 40),
+		-- extend UPWARD over the tab (line is at bottom of button)
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0, 2),
+		Size = UDim2.new(1, 24, 0, 28),
 		ZIndex = 2,
 		Visible = false,
 		BorderSizePixel = 0,
