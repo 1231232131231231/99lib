@@ -433,7 +433,7 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
--- ZOVII_UI_BUILD=DETACHED_v7
+-- ZOVII_UI_BUILD=DETACHED_v8
 function library:add_window_glow(parent)
 	if not parent then return end
 	local g = library:create("ImageLabel", {
@@ -2726,21 +2726,21 @@ function library:tab(properties)
 
 	library:apply_theme(line, "accent", "BackgroundColor3")
 
-	-- glow only rises UP from the underline; width matches the line (no side overflow)
+	-- glow sits on the tab underline and only rises UP (same width as the line)
 	local glow = library:create("ImageLabel", {
-		Parent = line,
+		Parent = TAB_BUTTON,
 		Name = "",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.45,
+		ImageTransparency = 0.4,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		Image = "http://www.roblox.com/asset/?id=18245826428",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 22),
-		ZIndex = 2,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 14),
+		ZIndex = 0,
 		Visible = false,
 		BorderSizePixel = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
