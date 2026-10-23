@@ -433,7 +433,7 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
--- ZOVII_UI_BUILD=DETACHED_v4
+-- ZOVII_UI_BUILD=DETACHED_v4b
 function library:add_window_glow(parent)
 	if not parent then return end
 	local g = library:create("ImageLabel", {
@@ -458,7 +458,7 @@ end
 function library:attach_title_bar(target_frame, title_text)
 	if not target_frame then return end
 	local TITLE_H = 22
-	local GAP = 3
+	local GAP = 1 -- tight to window block
 
 	local bar = library:create("Frame", {
 		Parent = library.gui,
@@ -547,13 +547,31 @@ function library:attach_title_bar(target_frame, title_text)
 		end
 	end)
 
+	-- If root is fully transparent (keybinds), size/position to the first opaque child so header matches the visible block
+	local function get_visual()
+		if target_frame.BackgroundTransparency < 0.99 then
+			return target_frame
+		end
+		for _, c in ipairs(target_frame:GetChildren()) do
+			if c:IsA("GuiObject") and c.Name ~= "WindowGlow" and c.Name ~= "TitleBar" then
+				if c:IsA("Frame") and c.BackgroundTransparency < 0.99 then
+					return c
+				end
+			end
+		end
+		return target_frame
+	end
+
 	library:connection(run.RenderStepped, function()
 		pcall(function()
 			if not target_frame.Parent then return end
 			bar.Visible = target_frame.Visible
-			local w = math.max(80, target_frame.AbsoluteSize.X)
+			local visual = get_visual()
+			local w = math.max(60, visual.AbsoluteSize.X)
+			local x = visual.AbsolutePosition.X
+			local y = visual.AbsolutePosition.Y - TITLE_H - GAP
 			bar.Size = UDim2.new(0, w, 0, TITLE_H)
-			bar.Position = UDim2.new(0, target_frame.AbsolutePosition.X, 0, target_frame.AbsolutePosition.Y - TITLE_H - GAP)
+			bar.Position = UDim2.new(0, x, 0, y)
 		end)
 	end)
 
