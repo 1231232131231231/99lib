@@ -1623,27 +1623,6 @@ function library:window(properties)
 	library:add_window_glow(playerlist)
 	library:attach_title_bar(playerlist, "playerlist")
 
-	local name = library:create("TextLabel", {
-		Parent = playerlist,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(170, 170, 170),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "playerlist",
-		TextStrokeTransparency = 0.5,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, -1),
-		Size = UDim2.new(1, 0, 0, 1),
-		ZIndex = 2,
-		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	})
-
-	local UIPadding = library:create("UIPadding", {
-		Parent = name,
-		Name = "",
-	})
 
 	local main = library:create("Frame", {
 		Parent = playerlist,
@@ -2266,23 +2245,6 @@ function library:window(properties)
 	})
 
 	library:apply_theme(accent_line, "accent", "BackgroundColor3")
-
-	local name = library:create("TextLabel", {
-		Parent = inline1,
-		Name = "",
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(170, 170, 170),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = "keybinds",
-		TextStrokeTransparency = 0.5,
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, -1),
-		Size = UDim2.new(1, 0, 0, 1),
-		ZIndex = 2,
-		TextSize = 12,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	})
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
