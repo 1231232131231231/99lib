@@ -203,18 +203,16 @@ function library.to_screen_point(position)
 end
 
 function library:unload()
-	pcall(function() uis.MouseIconEnabled = true end)
-	pcall(function()
-		local b = camera:FindFirstChild("ZoviiMenuBlur")
-		if b then b:Destroy() end
-	end)
-	if library.gui then library.gui:Destroy() end
+	library.gui:Destroy()
+
 	for _, connection in library.connections do
-		pcall(function() connection:Disconnect() end)
+		connection:Disconnect()
 	end
+
 	for _, item in library.instances do
-		pcall(function() item:Destroy() end)
+		item:Destroy()
 	end
+
 	getgenv().library = nil
 end
 
@@ -417,11 +415,14 @@ end
 
 function library:create(instance, options)
 	local ins = Instance.new(instance)
-
 	for prop, value in next, options do
-		ins[prop] = value
+		local ok, err = pcall(function()
+			ins[prop] = value
+		end)
+		if not ok then
+			warn("[zovii ui] create property failed:", instance, prop, err)
+		end
 	end
-
 	return ins
 end
 --
@@ -431,7 +432,7 @@ library.gui = library:create("ScreenGui", {
 	Parent = coregui,
 	Name = "",
 	DisplayOrder = 50,
-	ZIndexBehavior = Enum.ZIndexBehavior.Global,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	IgnoreGuiInset = true,
 	ResetOnSpawn = false,
 })
@@ -455,6 +456,102 @@ function library:add_window_glow(parent)
 	})
 	library:apply_theme(g, "accent", "ImageColor3")
 	return g
+end
+
+function library:attach_title_bar(target_frame, title_text)
+	-- separate title bar ABOVE target_frame (same style as main window)
+	if not target_frame then return end
+	local bar = library:create("Frame", {
+		Parent = library.gui,
+		Name = "TitleBar",
+		BorderColor3 = Color3.fromRGB(8, 8, 8),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		ZIndex = 3,
+		Active = true,
+		Size = UDim2.new(0, math.max(80, target_frame.AbsoluteSize.X), 0, 22),
+		Position = UDim2.new(0, target_frame.AbsolutePosition.X, 0, target_frame.AbsolutePosition.Y - 26),
+	})
+	library:add_window_glow(bar)
+	local accent = library:create("Frame", {
+		Parent = bar,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = themes.preset.accent,
+	})
+	library:apply_theme(accent, "accent", "BackgroundColor3")
+	local inner = library:create("Frame", {
+		Parent = bar,
+		Position = UDim2.new(0, 2, 0, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
+	})
+	local label = library:create("TextLabel", {
+		Parent = inner,
+		FontFace = library.font,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 0,
+		Text = title_text or "",
+		TextStrokeTransparency = 0.5,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -8, 0, 14),
+		ZIndex = 4,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+	local grad = library:create("UIGradient", {
+		Parent = label,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+		}),
+	})
+	task.spawn(function()
+		while label.Parent do
+			local a = math.abs(math.sin(tick() * 1.2))
+			pcall(function()
+				grad.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+				})
+			end)
+			task.wait(0.03)
+		end
+	end)
+	-- drag target from title
+	local dragging, start, win_start = false, nil, nil
+	library:connection(bar.InputBegan, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			start = input.Position
+			win_start = target_frame.AbsolutePosition
+		end
+	end)
+	library:connection(uis.InputEnded, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	library:connection(uis.InputChanged, function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local d = input.Position - start
+			target_frame.Position = UDim2.new(0, win_start.X + d.X, 0, win_start.Y + d.Y)
+		end
+	end)
+	library:connection(run.RenderStepped, function()
+		pcall(function()
+			bar.Visible = target_frame.Visible
+			local w = math.max(60, target_frame.AbsoluteSize.X)
+			bar.Size = UDim2.new(0, w, 0, 22)
+			bar.Position = UDim2.new(0, target_frame.AbsolutePosition.X, 0, target_frame.AbsolutePosition.Y - 26)
+		end)
+	end)
+	return bar
 end
 
 function library:window(properties)
@@ -620,13 +717,13 @@ function library:window(properties)
 	end)
 	--
 
-	-- window (original layout — do not nest in shell)
+	-- window
 	local inline1 = library:create("Frame", {
 		Parent = library.gui,
-		Name = "MainWindow",
+		Name = "",
 		Active = true,
 		Draggable = true,
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 + 14),
+		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2),
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		ZIndex = 2,
 		Size = cfg.size,
@@ -636,103 +733,7 @@ function library:window(properties)
 	local WINDOW_PATH = inline1
 	library:make_resizable(inline1)
 	library:add_window_glow(inline1)
-
-	-- TITLE ABOVE main window (sibling, glued each frame — never parents content)
-	local title_bar = library:create("Frame", {
-		Parent = library.gui,
-		Name = "TitleBar",
-		BorderColor3 = Color3.fromRGB(8, 8, 8),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 3,
-		Active = true,
-		Size = UDim2.new(0, cfg.size.X.Offset, 0, 24),
-		Position = UDim2.new(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2 + 14 - 28),
-	})
-	table.insert(library.main_frame, title_bar)
-	library:add_window_glow(title_bar)
-
-	local title_accent = library:create("Frame", {
-		Parent = title_bar,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 2),
-		BackgroundColor3 = themes.preset.accent,
-	})
-	library:apply_theme(title_accent, "accent", "BackgroundColor3")
-
-	local title_inner = library:create("Frame", {
-		Parent = title_bar,
-		Position = UDim2.new(0, 2, 0, 2),
-		Size = UDim2.new(1, -4, 1, -4),
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
-	})
-
-	local title_name = library:create("TextLabel", {
-		Parent = title_inner,
-		FontFace = library.font,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-		Text = cfg.name,
-		TextStrokeTransparency = 0.5,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, -10, 0, 14),
-		ZIndex = 4,
-		TextSize = 13,
-		TextScaled = false,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-
-	local TITLE_GRADIENT = library:create("UIGradient", {
-		Parent = title_name,
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-			ColorSequenceKeypoint.new(0.5, themes.preset.accent),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-		}),
-	})
-	task.spawn(function()
-		while title_name.Parent do
-			local a = math.abs(math.sin(tick() * 1.2))
-			pcall(function()
-				TITLE_GRADIENT.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-					ColorSequenceKeypoint.new(math.clamp(a, 0.05, 0.95), themes.preset.accent),
-					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
-				})
-			end)
-			task.wait(0.03)
-		end
-	end)
-
-	local drag_title, drag_start, win_start = false, nil, nil
-	library:connection(title_bar.InputBegan, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			drag_title = true
-			drag_start = input.Position
-			win_start = inline1.AbsolutePosition
-		end
-	end)
-	library:connection(uis.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			drag_title = false
-		end
-	end)
-	library:connection(uis.InputChanged, function(input)
-		if drag_title and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local d = input.Position - drag_start
-			inline1.Position = UDim2.new(0, win_start.X + d.X, 0, win_start.Y + d.Y)
-		end
-	end)
-	library:connection(run.RenderStepped, function()
-		pcall(function()
-			title_bar.Visible = inline1.Visible
-			title_bar.Size = UDim2.new(0, inline1.AbsoluteSize.X, 0, 24)
-			title_bar.Position = UDim2.new(0, inline1.AbsolutePosition.X, 0, inline1.AbsolutePosition.Y - 28)
-		end)
-	end)
+	local main_title_bar = library:attach_title_bar(inline1, cfg.name)
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
@@ -760,7 +761,7 @@ function library:window(properties)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 4),
 		Size = UDim2.new(1, -32, 0, 22),
-		ZIndex = 2,
+		ZIndex = 5,
 		BorderSizePixel = 0,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 	})
@@ -772,7 +773,6 @@ function library:window(properties)
 		Name = "",
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		HorizontalFlex = Enum.UIFlexAlignment.Fill,
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
@@ -784,6 +784,7 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		Size = UDim2.new(1, -30, 1, -48),
 		BorderSizePixel = 0,
+		ZIndex = 5,
 		BackgroundColor3 = Color3.fromRGB(19, 19, 19),
 	})
 
@@ -1620,6 +1621,7 @@ function library:window(properties)
 
 	table.insert(library.main_frame, playerlist)
 	library:add_window_glow(playerlist)
+	library:attach_title_bar(playerlist, "playerlist")
 
 	local name = library:create("TextLabel", {
 		Parent = playerlist,
@@ -2010,7 +2012,6 @@ function library:window(properties)
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		HorizontalFlex = Enum.UIFlexAlignment.Fill,
 		Padding = UDim.new(0, 4),
 	})
 
@@ -2161,7 +2162,6 @@ function library:window(properties)
 			Parent = TextButton,
 			Name = "",
 			FillDirection = Enum.FillDirection.Horizontal,
-			HorizontalFlex = Enum.UIFlexAlignment.Fill,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			VerticalFlex = Enum.UIFlexAlignment.Fill,
 		})
@@ -2213,7 +2213,7 @@ function library:window(properties)
 	-- keybind list
 	local old_kblist = library:create("Frame", {
 		Parent = library.gui,
-		Name = "",
+		Name = "KeybindList",
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
@@ -2224,6 +2224,10 @@ function library:window(properties)
 		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 	})
+	task.defer(function()
+		library:add_window_glow(old_kblist)
+		library:attach_title_bar(old_kblist, "keybinds")
+	end)
 
 	local glow = library:create("ImageLabel", {
 		Parent = old_kblist,
@@ -2389,9 +2393,9 @@ function library:window(properties)
 		Parent = backdrop,
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
+		BorderSizePixel = 0,
 		ZIndex = 1,
 		ClipsDescendants = true,
-		BorderSizePixel = 0,
 	})
 	task.spawn(function()
 		local rng = Random.new()
@@ -2447,21 +2451,17 @@ function library:window(properties)
 		cursor_gui.Position = UDim2.new(0, m.X - 18, 0, m.Y - 18)
 	end)
 
-	local function set_backdrop(open)
-		menu_open = open and true or false
+	function cfg.set_menu_visibility(bool, pl)
+		WINDOW_PATH.Visible = bool
+		if main_title_bar then main_title_bar.Visible = bool end
+		playerlist.Visible = flags["player_list"] and bool or false
+		menu_open = bool and true or false
 		backdrop.Visible = menu_open
 		cursor_gui.Visible = menu_open
 		pcall(function()
 			blur_fx.Size = menu_open and 16 or 0
 			uis.MouseIconEnabled = not menu_open
 		end)
-	end
-
-	function cfg.set_menu_visibility(bool, pl)
-		WINDOW_PATH.Visible = bool
-		title_bar.Visible = bool
-		playerlist.Visible = flags["player_list"] and bool or false
-		set_backdrop(bool == true)
 	end
 
 	return setmetatable(cfg, library)
@@ -2747,7 +2747,7 @@ function library:tab(properties)
 		Text = cfg.name,
 		TextStrokeTransparency = 0.5,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(0.3330000042915344, -4, 0, 22),
+		Size = UDim2.new(0, 90, 0, 22),
 		BorderSizePixel = 0,
 		TextSize = 12,
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
@@ -2827,7 +2827,6 @@ function library:tab(properties)
 		Parent = scrolling_columns,
 		Name = "",
 		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalFlex = Enum.UIFlexAlignment.Fill,
 		Padding = UDim.new(0, 5),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
