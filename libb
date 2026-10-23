@@ -433,7 +433,7 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
--- ZOVII_UI_BUILD=DETACHED_v5
+-- ZOVII_UI_BUILD=DETACHED_v6
 function library:add_window_glow(parent)
 	if not parent then return end
 	local g = library:create("ImageLabel", {
@@ -441,7 +441,7 @@ function library:add_window_glow(parent)
 		Name = "WindowGlow",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.55,
+		ImageTransparency = 0.5,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
@@ -458,7 +458,8 @@ end
 function library:attach_title_bar(target_frame, title_text)
 	if not target_frame then return end
 	local TITLE_H = 22
-	local GAP = 1
+	local GAP = 2
+	local GuiService = game:GetService("GuiService")
 
 	local bar = library:create("Frame", {
 		Parent = library.gui,
@@ -467,7 +468,7 @@ function library:attach_title_bar(target_frame, title_text)
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 		ZIndex = 25,
 		Active = true,
-		AnchorPoint = Vector2.new(0, 1), -- bottom of title sits just above window
+		AnchorPoint = Vector2.new(0, 1),
 		Size = UDim2.new(0, 100, 0, TITLE_H),
 		Position = UDim2.new(0, 0, 0, 0),
 	})
@@ -528,11 +529,11 @@ function library:attach_title_bar(target_frame, title_text)
 		end
 	end)
 
-	local dragging, start, win_start = false, nil, nil
+	local dragging, drag_start, win_start = false, nil, nil
 	library:connection(bar.InputBegan, function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
-			start = input.Position
+			drag_start = input.Position
 			win_start = target_frame.AbsolutePosition
 		end
 	end)
@@ -543,8 +544,10 @@ function library:attach_title_bar(target_frame, title_text)
 	end)
 	library:connection(uis.InputChanged, function(input)
 		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local d = input.Position - start
-			target_frame.Position = UDim2.new(0, win_start.X + d.X, 0, win_start.Y + d.Y)
+			local d = input.Position - drag_start
+			local inset = GuiService:GetGuiInset()
+			local iy = (library.gui.IgnoreGuiInset and inset.Y) or 0
+			target_frame.Position = UDim2.new(0, win_start.X + d.X, 0, win_start.Y + d.Y + iy)
 		end
 	end)
 
@@ -560,16 +563,25 @@ function library:attach_title_bar(target_frame, title_text)
 		return target_frame
 	end
 
+	-- AbsolutePosition is often reported WITHOUT the topbar inset while
+	-- ScreenGui IgnoreGuiInset Position IS from the real top of the screen.
+	-- Add inset.Y so the title sits flush on the window instead of floating high.
 	library:connection(run.RenderStepped, function()
 		pcall(function()
 			if not target_frame.Parent then return end
 			bar.Visible = target_frame.Visible
 			local visual = get_visual()
+			local inset = GuiService:GetGuiInset()
+			local iy = 0
+			if library.gui.IgnoreGuiInset then
+				iy = inset.Y
+			end
 			local w = math.max(60, visual.AbsoluteSize.X)
-			-- AnchorPoint (0,1): Position = where the BOTTOM of the title sits
-			-- sit GAP px above the visual's top edge
+			local x = visual.AbsolutePosition.X
+			-- AnchorPoint (0,1): bottom of title at this Y
+			local y = visual.AbsolutePosition.Y + iy - GAP
 			bar.Size = UDim2.new(0, w, 0, TITLE_H)
-			bar.Position = UDim2.new(0, visual.AbsolutePosition.X, 0, visual.AbsolutePosition.Y - GAP)
+			bar.Position = UDim2.new(0, x, 0, y)
 		end)
 	end)
 
@@ -2719,15 +2731,14 @@ function library:tab(properties)
 		Name = "",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.65,
+		ImageTransparency = 0.5,
 		BorderColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		Image = "http://www.roblox.com/asset/?id=18245826428",
 		BackgroundTransparency = 1,
-		-- extend UPWARD over the tab (line is at bottom of button)
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, 2),
-		Size = UDim2.new(1, 24, 0, 28),
+		Position = UDim2.new(0.5, 0, 0, 1),
+		Size = UDim2.new(1, 30, 0, 36),
 		ZIndex = 2,
 		Visible = false,
 		BorderSizePixel = 0,
