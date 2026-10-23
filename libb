@@ -416,12 +416,7 @@ end
 function library:create(instance, options)
 	local ins = Instance.new(instance)
 	for prop, value in next, options do
-		local ok, err = pcall(function()
-			ins[prop] = value
-		end)
-		if not ok then
-			warn("[zovii ui] create property failed:", instance, prop, err)
-		end
+		pcall(function() ins[prop] = value end)
 	end
 	return ins
 end
@@ -438,56 +433,88 @@ library.gui = library:create("ScreenGui", {
 })
 
 -- library functions
+-- ZOVII_UI_BUILD=FLUSH_SHADOW_v3
 function library:add_window_glow(parent)
+	-- soft accent shadow sitting UNDER the frame, peaking slightly
 	if not parent then return end
-	-- behind the frame, tight peak (~10px) so no empty gap between glow and block
 	local g = library:create("ImageLabel", {
 		Parent = parent,
 		Name = "WindowGlow",
 		ImageColor3 = themes.preset.accent,
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.75,
+		ImageTransparency = 0.78,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -10, 0, -10),
-		Size = UDim2.new(1, 20, 1, 20),
+		Position = UDim2.new(0, -8, 0, -8),
+		Size = UDim2.new(1, 16, 1, 16),
 		ZIndex = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
 	})
 	library:apply_theme(g, "accent", "ImageColor3")
+	-- extra soft black drop-shadow layer under
+	local sh = library:create("ImageLabel", {
+		Parent = parent,
+		Name = "WindowShadow",
+		ImageColor3 = Color3.fromRGB(0, 0, 0),
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.55,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -6, 0, -4),
+		Size = UDim2.new(1, 12, 1, 14),
+		ZIndex = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
 	return g
 end
 
 function library:attach_title_bar(target_frame, title_text)
 	if not target_frame then return end
-	local TITLE_H = 20
-	local GAP = 1
+	pcall(function() target_frame.ClipsDescendants = false end)
 
-	-- Parented to the window so it stays flush (no AbsolutePosition gap)
+	local TITLE_H = 20
+	local GAP = 0 -- flush against window top
+
 	local bar = library:create("Frame", {
 		Parent = target_frame,
 		Name = "TitleBar",
 		BorderColor3 = Color3.fromRGB(8, 8, 8),
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		ZIndex = 50,
+		ZIndex = 60,
 		Active = true,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 0, -GAP),
 		Size = UDim2.new(1, 0, 0, TITLE_H),
 	})
-	-- glow on title (tight)
-	local tg = library:create("ImageLabel", {
+
+	-- title glow as soft SHADOW (dark under + faint accent edge)
+	library:create("ImageLabel", {
 		Parent = bar,
-		Name = "WindowGlow",
-		ImageColor3 = themes.preset.accent,
+		Name = "TitleShadow",
+		ImageColor3 = Color3.fromRGB(0, 0, 0),
 		ScaleType = Enum.ScaleType.Slice,
-		ImageTransparency = 0.82,
+		ImageTransparency = 0.5,
 		BorderSizePixel = 0,
 		BackgroundTransparency = 1,
 		Image = "http://www.roblox.com/asset/?id=18245826428",
-		Position = UDim2.new(0, -12, 0, -12),
-		Size = UDim2.new(1, 24, 1, 24),
+		Position = UDim2.new(0, -8, 0, -4),
+		Size = UDim2.new(1, 16, 1, 14),
+		ZIndex = 0,
+		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
+	})
+	local tg = library:create("ImageLabel", {
+		Parent = bar,
+		Name = "TitleGlow",
+		ImageColor3 = themes.preset.accent,
+		ScaleType = Enum.ScaleType.Slice,
+		ImageTransparency = 0.85,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Image = "http://www.roblox.com/asset/?id=18245826428",
+		Position = UDim2.new(0, -6, 0, -6),
+		Size = UDim2.new(1, 12, 1, 12),
 		ZIndex = 0,
 		SliceCenter = Rect.new(Vector2.new(21, 21), Vector2.new(79, 79)),
 	})
@@ -497,7 +524,7 @@ function library:attach_title_bar(target_frame, title_text)
 		Parent = bar,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 2),
-		ZIndex = 51,
+		ZIndex = 61,
 		BackgroundColor3 = themes.preset.accent,
 	})
 	library:apply_theme(accent, "accent", "BackgroundColor3")
@@ -507,7 +534,7 @@ function library:attach_title_bar(target_frame, title_text)
 		Position = UDim2.new(0, 1, 0, 2),
 		Size = UDim2.new(1, -2, 1, -3),
 		BorderSizePixel = 0,
-		ZIndex = 51,
+		ZIndex = 61,
 		BackgroundColor3 = Color3.fromRGB(26, 26, 26),
 	})
 
@@ -522,7 +549,7 @@ function library:attach_title_bar(target_frame, title_text)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(1, -8, 0, 14),
-		ZIndex = 52,
+		ZIndex = 62,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center,
@@ -548,10 +575,6 @@ function library:attach_title_bar(target_frame, title_text)
 			end)
 			task.wait(0.03)
 		end
-	end)
-
-	pcall(function()
-		target_frame.ClipsDescendants = false
 	end)
 
 	local dragging, start, win_start = false, nil, nil
@@ -756,7 +779,7 @@ function library:window(properties)
 	local WINDOW_PATH = inline1
 	library:make_resizable(inline1)
 	library:add_window_glow(inline1)
-	local main_title_bar = library:attach_title_bar(inline1, cfg.name)
+	library:attach_title_bar(inline1, cfg.name)
 
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
@@ -807,7 +830,6 @@ function library:window(properties)
 		BorderColor3 = Color3.fromRGB(19, 19, 19),
 		Size = UDim2.new(1, -30, 1, -48),
 		BorderSizePixel = 0,
-		ZIndex = 5,
 		BackgroundColor3 = Color3.fromRGB(19, 19, 19),
 	})
 
@@ -2232,6 +2254,7 @@ function library:window(properties)
 
 	library:apply_theme(accent_line, "accent", "BackgroundColor3")
 
+
 	local inline2 = library:create("Frame", {
 		Parent = inline1,
 		Name = "",
@@ -2320,96 +2343,10 @@ function library:window(properties)
 		__holder.Visible = bool
 	end
 
-	local menu_open = true
-	local backdrop = library:create("Frame", {
-		Parent = library.gui,
-		Name = "MenuBackdrop",
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 0,
-	})
-	library:create("Frame", {
-		Parent = backdrop,
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.55,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 0,
-	})
-	local snow_layer = library:create("Frame", {
-		Parent = backdrop,
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		BorderSizePixel = 0,
-		ZIndex = 1,
-		ClipsDescendants = true,
-	})
-	task.spawn(function()
-		local rng = Random.new()
-		local SNOW = "http://www.roblox.com/asset/?id=6871196088"
-		while snow_layer.Parent do
-			if menu_open then
-				local w, h = snow_layer.AbsoluteSize.X, snow_layer.AbsoluteSize.Y
-				if w > 0 and h > 0 then
-					local sz = rng:NextInteger(5, 8)
-					local sx = rng:NextInteger(0, math.max(0, w - sz))
-					local flake = Instance.new("ImageLabel")
-					flake.BackgroundTransparency = 1
-					flake.Image = SNOW
-					flake.Size = UDim2.fromOffset(sz, sz)
-					flake.Position = UDim2.fromOffset(sx, -10)
-					flake.Parent = snow_layer
-					local tw = tween_service:Create(flake, TweenInfo.new(rng:NextNumber(2, 4), Enum.EasingStyle.Linear), {
-						Position = UDim2.fromOffset(sx + rng:NextInteger(-18, 18), h + 10),
-						ImageTransparency = 1,
-					})
-					tw:Play()
-					tw.Completed:Connect(function() flake:Destroy() end)
-				end
-				task.wait(rng:NextNumber(0.05, 0.12))
-			else
-				task.wait(0.15)
-			end
-		end
-	end)
-
-	local blur_fx = Instance.new("BlurEffect")
-	blur_fx.Name = "ZoviiMenuBlur"
-	blur_fx.Size = 16
-	blur_fx.Parent = camera
-	table.insert(library.instances, blur_fx)
-
-	local cursor_gui = library:create("ImageLabel", {
-		Parent = library.gui,
-		Visible = true,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Image = "http://www.roblox.com/asset/?id=5545698398",
-		Size = UDim2.new(0, 36, 0, 36),
-		ZIndex = 10000,
-	})
-	pcall(function()
-		uis.MouseIconEnabled = false
-		uis.MouseBehavior = Enum.MouseBehavior.Default
-	end)
-	library:connection(run.RenderStepped, function()
-		if not (menu_open and cursor_gui.Visible) then return end
-		local m = uis:GetMouseLocation()
-		cursor_gui.Position = UDim2.new(0, m.X - 18, 0, m.Y - 18)
-	end)
-
 	function cfg.set_menu_visibility(bool, pl)
 		WINDOW_PATH.Visible = bool
-		if main_title_bar then main_title_bar.Visible = bool end
+
 		playerlist.Visible = flags["player_list"] and bool or false
-		menu_open = bool and true or false
-		backdrop.Visible = menu_open
-		cursor_gui.Visible = menu_open
-		pcall(function()
-			blur_fx.Size = menu_open and 16 or 0
-			uis.MouseIconEnabled = not menu_open
-		end)
 	end
 
 	return setmetatable(cfg, library)
@@ -2891,9 +2828,7 @@ function library:tab(properties)
 
 	TAB_BUTTON.MouseButton1Click:Connect(cfg.open_tab)
 	if not library.current_tab then
-		task.defer(function()
-			pcall(cfg.open_tab)
-		end)
+		task.defer(function() pcall(cfg.open_tab) end)
 	end
 	return setmetatable(cfg, library)
 end
